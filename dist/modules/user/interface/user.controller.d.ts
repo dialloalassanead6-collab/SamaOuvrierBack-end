@@ -31,6 +31,9 @@ export declare class UserController {
     /**
      * Get all users (admin only)
      * GET /users
+     *
+     * Pagination is handled by pagination middleware
+     * req.pagination contains { page, pageSize, skip, take }
      */
     getAll(req: Request, res: Response, next: NextFunction): Promise<void>;
     /**

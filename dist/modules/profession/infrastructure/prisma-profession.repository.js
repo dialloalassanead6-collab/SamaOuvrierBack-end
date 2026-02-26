@@ -37,13 +37,21 @@ export class PrismaProfessionRepository {
         return ProfessionEntity.fromPrisma(prismaProfession);
     }
     /**
-     * Find all professions ordered by name
+     * Find all professions with pagination
      */
-    async findAll() {
-        const prismaProfessions = await this.prisma.profession.findMany({
-            orderBy: { name: 'asc' },
-        });
-        return prismaProfessions.map(ProfessionEntity.fromPrisma);
+    async findAll(skip = 0, take = 100) {
+        const [prismaProfessions, total] = await Promise.all([
+            this.prisma.profession.findMany({
+                skip,
+                take,
+                orderBy: { name: 'asc' },
+            }),
+            this.prisma.profession.count(),
+        ]);
+        return {
+            professions: prismaProfessions.map(ProfessionEntity.fromPrisma),
+            total,
+        };
     }
     /**
      * Create a new profession

@@ -2,6 +2,7 @@
 // Express router for authentication endpoints
 import { Router } from 'express';
 import { AuthController } from './auth.controller.js';
+import { createAuthRateLimiter } from '../../../shared/middleware/rate-limit.middleware.js';
 /**
  * @swagger
  * /auth/register:
@@ -193,8 +194,9 @@ export const createAuthRoutes = (authService) => {
     // Create controller instance
     const authController = new AuthController(authService);
     // Public routes (no authentication required)
-    router.post('/register', authController.register.bind(authController));
-    router.post('/login', authController.login.bind(authController));
+    // Rate limiting appliqué pour protéger contre les attaques par force brute
+    router.post('/register', createAuthRateLimiter(), authController.register.bind(authController));
+    router.post('/login', createAuthRateLimiter(), authController.login.bind(authController));
     return router;
 };
 //# sourceMappingURL=auth.routes.js.map

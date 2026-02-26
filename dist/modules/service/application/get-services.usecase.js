@@ -9,10 +9,12 @@ export class GetServicesUseCase {
     }
     /**
      * Execute the use case
+     * @param workerId - Optional worker ID to filter services
+     * @param skip - Number of records to skip (calculated from page in controller)
+     * @param take - Number of records to take (pageSize)
      */
-    async execute(workerId, page = 1, pageSize = 10) {
-        const skip = (page - 1) * pageSize;
-        const { services, total } = await this.serviceRepository.findAll(workerId, skip, pageSize);
+    async execute(workerId, skip = 0, take = 10) {
+        const { services, total } = await this.serviceRepository.findAll(workerId, skip, take);
         return {
             services: services.map((service) => service.toResponse()),
             total,

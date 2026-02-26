@@ -8,8 +8,10 @@ export declare class GetUsersUseCase {
     constructor(userRepository: IUserRepository);
     /**
      * Execute the use case
+     * @param skip - Number of records to skip (calculated from page in controller)
+     * @param take - Number of records to take (pageSize)
      */
-    execute(page?: number, pageSize?: number): Promise<{
+    execute(skip?: number, take?: number): Promise<{
         users: UserResponse[];
         total: number;
     }>;

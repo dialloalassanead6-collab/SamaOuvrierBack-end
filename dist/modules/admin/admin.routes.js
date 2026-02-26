@@ -5,8 +5,7 @@
 // ============================================================================
 import { Router } from 'express';
 import { adminController } from './interface/index.js';
-import { authenticate } from '../../shared/middleware/index.js';
-import { authorize } from '../../shared/middleware/index.js';
+import { authenticate, authorize, pagination } from '../../shared/middleware/index.js';
 import { Role } from '@prisma/client';
 import { asyncHandler } from '../../shared/utils/index.js';
 /**
@@ -33,17 +32,18 @@ const router = Router();
  *           enum: [PENDING, APPROVED, REJECTED]
  *         description: Statut du travailleur (optionnel)
  *       - in: query
- *         name: skip
+ *         name: page
  *         schema:
  *           type: integer
- *           default: 0
- *         description: Nombre d'éléments à ignorer
+ *           default: 1
+ *         description: Numéro de page
  *       - in: query
- *         name: take
+ *         name: pageSize
  *         schema:
  *           type: integer
- *           default: 20
- *         description: Nombre d'éléments à récupérer
+ *           default: 10
+ *           maximum: 100
+ *         description: Nombre d'éléments par page (max: 100)
  *     responses:
  *       200:
  *         description: Liste des travailleurs
@@ -63,11 +63,17 @@ const router = Router();
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/UserResponse'
- *                     total:
- *                       type: integer
- *                     status:
- *                       type: string
- *                       enum: [PENDING, APPROVED, REJECTED]
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                         pageSize:
+ *                           type: integer
+ *                         total:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
  *       400:
  *         description: Paramètres invalides
  *       401:
@@ -75,7 +81,7 @@ const router = Router();
  *       403:
  *         description: Accès refusé (admin uniquement)
  */
-router.get('/workers', authenticate(), authorize(Role.ADMIN), asyncHandler(adminController.listWorkers.bind(adminController)));
+router.get('/workers', authenticate(), authorize(Role.ADMIN), pagination(), asyncHandler(adminController.listWorkers.bind(adminController)));
 /**
  * @swagger
  * /admin/workers/{id}/approve:

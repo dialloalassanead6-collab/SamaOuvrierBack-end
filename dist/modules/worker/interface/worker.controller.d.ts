@@ -7,10 +7,38 @@ import type { Request, Response, NextFunction } from 'express';
  * - Valider les entrées
  * - Appeler les use cases
  * - Formater les réponses HTTP
+ *
+ * ROUTES PUBLIQUES:
+ * - GET /workers/public - Liste des workers publics
+ * - GET /workers/:workerId/services - Services d'un worker
  */
 export declare class WorkerController {
     private reapplyWorkerUseCase;
+    private listPublicWorkersUseCase;
+    private listWorkerServicesUseCase;
     constructor();
+    /**
+     * Lister les workers publics
+     * GET /api/workers/public
+     *
+     * Query params:
+     * - professionId (optionnel): Filtrer par profession
+     * - page: Numéro de page (via middleware pagination)
+     * - pageSize: Taille de page (via middleware pagination)
+     */
+    listPublicWorkers(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
+    /**
+     * Lister les services d'un worker spécifique
+     * GET /api/workers/:workerId/services
+     *
+     * Params:
+     * - workerId: ID du worker
+     *
+     * Query params:
+     * - page: Numéro de page (via middleware pagination)
+     * - pageSize: Taille de page (via middleware pagination)
+     */
+    listWorkerServices(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
     /**
      * Refaire une demande de validation
      * PATCH /api/workers/me/reapply

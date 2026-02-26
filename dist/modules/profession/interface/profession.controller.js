@@ -3,6 +3,7 @@
 import { CreateProfessionUseCase, UpdateProfessionUseCase, DeleteProfessionUseCase, ListProfessionsUseCase, } from '../application/index.js';
 import { professionRepository } from '../infrastructure/index.js';
 import { asyncHandler, sendSuccess, sendCreated, sendError, sendNotFound, sendConflict } from '../../../shared/utils/index.js';
+import { getPaginationMetadata } from '../../../shared/middleware/pagination.middleware.js';
 /**
  * Profession Controller
  *
@@ -30,12 +31,19 @@ export const professionController = {
     /**
      * Get all professions
      * GET /professions
-     * Public
+     * Public with pagination
      */
-    list: asyncHandler(async (_req, res, _next) => {
+    list: asyncHandler(async (req, res, _next) => {
+        // Use pagination params from middleware (already validated and capped)
+        const { page, pageSize, skip, take } = req.pagination;
         const listProfessionsUseCase = new ListProfessionsUseCase(professionRepository);
-        const professions = await listProfessionsUseCase.execute();
-        return sendSuccess(res, 'Professions récupérées avec succès.', professions);
+        const { professions, total } = await listProfessionsUseCase.execute(skip, take);
+        // Generate standardized pagination metadata
+        const pagination = getPaginationMetadata(page, pageSize, total);
+        return sendSuccess(res, 'Professions récupérées avec succès.', {
+            data: professions,
+            pagination,
+        });
     }),
     /**
      * Update a profession

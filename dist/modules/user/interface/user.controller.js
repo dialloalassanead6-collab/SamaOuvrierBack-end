@@ -3,6 +3,7 @@
 import { AddUserUseCase, GetUsersUseCase, GetUserByIdUseCase, UpdateUserUseCase, DeleteUserUseCase, } from '../application/index.js';
 import { userRepository } from '../infrastructure/index.js';
 import { passwordService } from '../../../shared/security/password.service.js';
+import { getPaginationMetadata } from '../../../shared/middleware/pagination.middleware.js';
 /**
  * User Controller
  *
@@ -52,20 +53,20 @@ export class UserController {
     /**
      * Get all users (admin only)
      * GET /users
+     *
+     * Pagination is handled by pagination middleware
+     * req.pagination contains { page, pageSize, skip, take }
      */
     async getAll(req, res, next) {
         try {
-            const page = Number(req.query['page']) || 1;
-            const pageSize = Number(req.query['pageSize']) || 10;
-            const { users, total } = await this.getUsersUseCase.execute(page, pageSize);
+            // Use pagination params from middleware (already validated and capped)
+            const { page, pageSize, skip, take } = req.pagination;
+            const { users, total } = await this.getUsersUseCase.execute(skip, take);
+            // Generate standardized pagination metadata
+            const pagination = getPaginationMetadata(page, pageSize, total);
             res.status(200).json({
-                users,
-                pagination: {
-                    page,
-                    limit: pageSize,
-                    total,
-                    totalPages: Math.ceil(total / pageSize),
-                },
+                data: users,
+                pagination,
             });
         }
         catch (error) {

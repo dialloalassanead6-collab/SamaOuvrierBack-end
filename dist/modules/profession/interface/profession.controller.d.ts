@@ -14,7 +14,7 @@ export declare const professionController: {
     /**
      * Get all professions
      * GET /professions
-     * Public
+     * Public with pagination
      */
     list: (req: Request, res: Response, next: NextFunction) => void;
     /**

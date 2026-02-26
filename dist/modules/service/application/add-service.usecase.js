@@ -1,6 +1,10 @@
 // Use Cases Layer - Add Service Use Case
 /**
  * Add Service Use Case
+ *
+ * SECURITY RULES:
+ * - Only WORKER role can create services
+ * - The workerId is taken from the authenticated user's JWT (not from request body)
  */
 export class AddServiceUseCase {
     serviceRepository;
@@ -9,11 +13,17 @@ export class AddServiceUseCase {
     }
     /**
      * Execute the use case
+     *
+     * @param input - Service creation data (without workerId)
+     * @param workerId - Worker ID from authenticated user (JWT)
      */
-    async execute(input) {
-        // Business rule: Validate that the service data is correct
-        // The entity constructor will validate invariants
-        const service = await this.serviceRepository.create(input);
+    async execute(input, workerId) {
+        // Create the service with the worker's ID (from JWT)
+        const serviceData = {
+            ...input,
+            workerId,
+        };
+        const service = await this.serviceRepository.create(serviceData);
         return service.toResponse();
     }
 }

@@ -26,6 +26,8 @@ export declare class AdminController {
     /**
      * Lister les travailleurs avec filtre optionnel par statut
      * GET /api/admin/workers?status=PENDING|APPROVED|REJECTED
+     *
+     * Pagination handled by middleware: page, pageSize
      */
     listWorkers(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
     /**

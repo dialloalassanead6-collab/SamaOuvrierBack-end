@@ -42,6 +42,20 @@ export declare class User {
      */
     isWorker(): boolean;
     /**
+     * Check if worker can reapply for validation
+     *
+     * BUSINESS RULE: A worker can reapply ONLY if:
+     * - workerStatus === REJECTED
+     * - isBanned === false
+     * - deletedAt === null
+     *
+     * Returns an object with the result and reason for logging/debugging
+     */
+    canReapply(): {
+        canReapply: boolean;
+        reason?: string;
+    };
+    /**
      * Convert to plain object for response (excludes password)
      */
     toResponse(): UserResponse;

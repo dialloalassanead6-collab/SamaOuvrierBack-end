@@ -2,19 +2,27 @@
 // USE CASE: Refaire une demande de validation (Reapply)
 // ============================================================================
 // Ce use case permet à un travailleur rejeté de refaire une demande.
+// Sécurisé avec toutes les vérifications métier obligatoires.
 // ============================================================================
 import { Role, WorkerStatus } from '@prisma/client';
-import { BusinessError } from '../../../shared/errors/index.js';
-import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../shared/constants/messages.js';
+import { BusinessErrors } from '../../../shared/errors/index.js';
+import { WORKER_VALIDATION_MESSAGES, USER_MESSAGES } from '../../../shared/constants/messages.js';
 /**
  * Use case pour refaire une demande de validation
  *
  * RESPONSABILITÉS:
  * - Vérifier que le travailleur existe
  * - Vérifier que l'utilisateur est un travailleur (role = WORKER)
+ * - Vérifier que le travailleur n'est pas banni (isBanned = false)
+ * - Vérifier que le compte n'est pas soft-deleted (deletedAt = null)
  * - Vérifier que le travailleur est rejeté (workerStatus = REJECTED)
  * - Remettre le travailleur en attente (workerStatus = PENDING)
  * - Réinitialiser rejectionReason à null
+ *
+ * 🔐 SÉCURITÉ:
+ * - Le workerId doit venir du JWT (req.user.sub)
+ * - Aucune donnée du client n'est acceptée pour l'ID
+ * - Toutes les conditions d'accès sont vérifiées AVANT toute modification
  */
 export class ReapplyWorkerUseCase {
     userRepository;
@@ -23,45 +31,84 @@ export class ReapplyWorkerUseCase {
     }
     /**
      * Exécuter le use case
+     *
+     * Ordre des vérifications (du plus simple au plus complexe):
+     * 1. Validation basique de l'input
+     * 2. Existence du worker
+     * 3. Vérification du rôle
+     * 4. Vérifications de sécurité (banni, supprimé)
+     * 5. Vérification du statut actuel
      */
     async execute(input) {
         const { workerId } = input;
-        // Vérifier que l'ID est fourni
-        if (!workerId) {
-            throw new BusinessError({
-                message: WORKER_VALIDATION_MESSAGES.WORKER_NOT_FOUND,
-                statusCode: HTTP_STATUS.BAD_REQUEST,
-                code: ERROR_CODES.INVALID_INPUT,
-            });
+        // -------------------------------------------------------------------------
+        // ÉTAPE 1: Validation de l'input
+        // -------------------------------------------------------------------------
+        // Le workerId ne doit jamais provenir du body de la requête.
+        // Il est extrait du JWT par le middleware d'authentification.
+        if (!workerId || typeof workerId !== 'string' || workerId.trim() === '') {
+            throw BusinessErrors.badRequest(WORKER_VALIDATION_MESSAGES.WORKER_NOT_FOUND, { workerId: 'ID du travailleur invalide ou manquant.' });
         }
-        // Récupérer le travailleur
+        // -------------------------------------------------------------------------
+        // ÉTAPE 2: Récupération du worker
+        // -------------------------------------------------------------------------
         const worker = await this.userRepository.findById(workerId);
-        // Vérifier que le travailleur existe
+        // -------------------------------------------------------------------------
+        // ÉTAPE 3: Vérification d'existence - 404 Not Found
+        // -------------------------------------------------------------------------
         if (!worker) {
-            throw new BusinessError({
-                message: WORKER_VALIDATION_MESSAGES.WORKER_NOT_FOUND,
-                statusCode: HTTP_STATUS.NOT_FOUND,
-                code: ERROR_CODES.NOT_FOUND,
-            });
+            throw BusinessErrors.notFound(WORKER_VALIDATION_MESSAGES.WORKER_NOT_FOUND);
         }
-        // Vérifier que c'est un travailleur
+        // -------------------------------------------------------------------------
+        // ÉTAPE 4: Vérification du rôle - Doit être WORKER
+        // -------------------------------------------------------------------------
         if (worker.role !== Role.WORKER) {
-            throw new BusinessError({
-                message: WORKER_VALIDATION_MESSAGES.WORKER_ACCESS_DENIED,
-                statusCode: HTTP_STATUS.FORBIDDEN,
-                code: ERROR_CODES.FORBIDDEN,
-            });
+            throw BusinessErrors.forbidden(WORKER_VALIDATION_MESSAGES.WORKER_ACCESS_DENIED);
         }
-        // Vérifier qu'il a été rejeté (seuls les travailleurs rejetés peuvent refaire une demande)
+        // -------------------------------------------------------------------------
+        // ÉTAPE 5: Vérification de sécurité - Compte banni (403 Forbidden)
+        // -------------------------------------------------------------------------
+        // Un worker banni ne peut pas refaire une demande.
+        // C'est une erreur 403 car l'identité est valide mais l'accès est interdit.
+        if (worker.isBanned === true) {
+            throw BusinessErrors.forbidden(USER_MESSAGES.USER_IS_BANNED);
+        }
+        // -------------------------------------------------------------------------
+        // ÉTAPE 6: Vérification de sécurité - Compte soft-deleted (403 Forbidden)
+        // -------------------------------------------------------------------------
+        // Un compte soft-deleted ne peut pas effectuer d'actions.
+        // C'est une erreur 403 car l'identité est valide mais le compte est inactif.
+        if (worker.deletedAt !== null) {
+            throw BusinessErrors.forbidden(USER_MESSAGES.USER_IS_DELETED);
+        }
+        // -------------------------------------------------------------------------
+        // ÉTAPE 7: Vérification du statut actuel - Doit être REJECTED (403 Forbidden)
+        // -------------------------------------------------------------------------
+        // Un worker peut refaire une demande UNIQUEMENT s'il a été rejeté.
+        // Si le statut est PENDING ou APPROVED, c'est une erreur 403 (accès interdit).
+        // L'erreur 400 n'est pas appropriée ici car le problème n'est pas une donnée
+        // invalide mais une condition d'accès non remplie.
+        if (worker.workerStatus === WorkerStatus.APPROVED) {
+            throw BusinessErrors.forbidden(WORKER_VALIDATION_MESSAGES.WORKER_ALREADY_APPROVED);
+        }
+        if (worker.workerStatus === WorkerStatus.PENDING) {
+            throw BusinessErrors.forbidden(WORKER_VALIDATION_MESSAGES.WORKER_INVALID_STATUS);
+        }
+        // -------------------------------------------------------------------------
+        // ÉTAPE 8: Vérification finale - Doit être REJECTED pour continuer
+        // -------------------------------------------------------------------------
+        // Cette vérification est redondante avec les deux précédentes mais
+        // explicite l'intention métier pour la maintenabilité du code.
         if (worker.workerStatus !== WorkerStatus.REJECTED) {
-            throw new BusinessError({
-                message: WORKER_VALIDATION_MESSAGES.WORKER_NOT_REJECTED,
-                statusCode: HTTP_STATUS.BAD_REQUEST,
-                code: ERROR_CODES.INVALID_INPUT,
-            });
+            throw BusinessErrors.forbidden(WORKER_VALIDATION_MESSAGES.WORKER_NOT_REJECTED);
         }
-        // Remettre le travailleur en attente
-        const updatedWorker = await this.userRepository.updateWorkerStatus(workerId, WorkerStatus.PENDING, null);
+        // -------------------------------------------------------------------------
+        // ÉTAPE 9: Mise à jour du statut vers PENDING
+        // -------------------------------------------------------------------------
+        // Toutes les vérifications sont passées, on peut maintenant
+        // remettre le worker en attente et réinitialiser la raison du rejet.
+        const updatedWorker = await this.userRepository.updateWorkerStatus(workerId, WorkerStatus.PENDING, null // Réinitialise rejectionReason à null
+        );
         return {
             user: updatedWorker,
             message: WORKER_VALIDATION_MESSAGES.WORKER_REAPPLY_SUCCESS,

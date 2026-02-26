@@ -1,6 +1,9 @@
 // Routes - Service Routes
+// Clean Architecture - Routes Layer
 import { Router } from 'express';
 import { serviceController } from './service.controller.js';
+import { authenticate, authorize, pagination } from '../../../shared/middleware/index.js';
+import { Role } from '@prisma/client';
 /**
  * @swagger
  * /services:
@@ -22,7 +25,6 @@ import { serviceController } from './service.controller.js';
  *             description: "Installation complete de plomberie pour maison"
  *             minPrice: 50000
  *             maxPrice: 500000
- *             workerId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
  *     responses:
  *       201:
  *         description: Service cree
@@ -34,10 +36,12 @@ import { serviceController } from './service.controller.js';
  *         description: Donnees invalides
  *       401:
  *         description: Non authentifie
+ *       403:
+ *         description: Acces refuse (reserve aux workers)
  *
  *   get:
  *     summary: Liste des services
- *     description: Recupere la liste des services avec pagination optionnelle
+ *     description: Recupere la liste des services avec pagination obligatoire
  *     tags:
  *       - Services
  *     parameters:
@@ -63,7 +67,7 @@ import { serviceController } from './service.controller.js';
  *       200:
  *         description: Liste des services
  *       401:
- *         description: Non authentifie
+ *         description: Non authentifie (ne devrait pas arriver pour routes publiques)
  *
  * /services/{id}:
  *   get:
@@ -87,13 +91,13 @@ import { serviceController } from './service.controller.js';
  *             schema:
  *               $ref: '#/components/schemas/Service'
  *       401:
- *         description: Non authentifie
+ *         description: Non authentifie (ne devrait pas arriver pour routes publiques)
  *       404:
  *         description: Service introuvable
  *
  *   put:
  *     summary: Modifier un service
- *     description: Met a jour les informations d'un service
+ *     description: Met a jour les informations d'un service (proprietaire ou admin uniquement)
  *     tags:
  *       - Services
  *     security:
@@ -116,17 +120,17 @@ import { serviceController } from './service.controller.js';
  *       200:
  *         description: Service mis a jour
  *       400:
- *         description: Donnees invalides (workerId requis)
+ *         description: Donnees invalides
  *       401:
  *         description: Non authentifie
  *       403:
- *         description: Acces refuse (pas le proprietaire)
+ *         description: Acces refuse (pas le proprietaire ni admin)
  *       404:
  *         description: Service introuvable
  *
  *   delete:
  *     summary: Supprimer un service
- *     description: Supprime un service (proprietaire uniquement)
+ *     description: Supprime un service (proprietaire ou admin uniquement)
  *     tags:
  *       - Services
  *     security:
@@ -142,25 +146,34 @@ import { serviceController } from './service.controller.js';
  *     responses:
  *       200:
  *         description: Service supprime
- *       400:
- *         description: Donnees invalides (workerId requis)
  *       401:
  *         description: Non authentifie
  *       403:
- *         description: Acces refuse
+ *         description: Acces refuse (pas le proprietaire ni admin)
  *       404:
  *         description: Service introuvable
  */
 const router = Router();
-// POST /services - Create a new service
-router.post('/', (req, res, next) => serviceController.create(req, res, next));
-// GET /services - Get all services
-router.get('/', (req, res, next) => serviceController.getAll(req, res, next));
-// GET /services/:id - Get service by ID
+// =============================================================================
+// PUBLIC ROUTES (No authentication required)
+// =============================================================================
+// GET /services - Get all services (PUBLIC - with pagination)
+router.get('/', pagination(), (req, res, next) => serviceController.getAll(req, res, next));
+// GET /services/:id - Get service by ID (PUBLIC)
 router.get('/:id', (req, res, next) => serviceController.getById(req, res, next));
+// =============================================================================
+// PROTECTED ROUTES (Authentication + Authorization required)
+// =============================================================================
+// POST /services - Create a new service
+// Access: WORKER only (authenticated)
+router.post('/', authenticate(), authorize(Role.WORKER, Role.ADMIN), (req, res, next) => serviceController.create(req, res, next));
 // PUT /services/:id - Update service
-router.put('/:id', (req, res, next) => serviceController.update(req, res, next));
+// Access: WORKER (own services only) or ADMIN (any service)
+// Note: Ownership check is done in the UseCase
+router.put('/:id', authenticate(), authorize(Role.WORKER, Role.ADMIN), (req, res, next) => serviceController.update(req, res, next));
 // DELETE /services/:id - Delete service
-router.delete('/:id', (req, res, next) => serviceController.delete(req, res, next));
+// Access: WORKER (own services only) or ADMIN (any service)
+// Note: Ownership check is done in the UseCase
+router.delete('/:id', authenticate(), authorize(Role.WORKER, Role.ADMIN), (req, res, next) => serviceController.delete(req, res, next));
 export default router;
 //# sourceMappingURL=service.routes.js.map

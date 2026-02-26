@@ -3,8 +3,7 @@
 import { Router } from 'express';
 import { Role } from '@prisma/client';
 import { professionController } from './profession.controller.js';
-import { authenticate } from '../../../shared/middleware/authenticate.middleware.js';
-import { authorize } from '../../../shared/middleware/authorize.middleware.js';
+import { authenticate, authorize, pagination } from '../../../shared/middleware/index.js';
 /**
  * @swagger
  * /professions:
@@ -148,8 +147,8 @@ import { authorize } from '../../../shared/middleware/authorize.middleware.js';
 const router = Router();
 // POST /professions - Create a profession (ADMIN only)
 router.post('/', authenticate(), authorize(Role.ADMIN), professionController.create);
-// GET /professions - Get all professions (Public)
-router.get('/', professionController.list);
+// GET /professions - Get all professions (Public with pagination)
+router.get('/', pagination(), professionController.list);
 // PATCH /professions/:id - Update a profession (ADMIN only)
 router.patch('/:id', authenticate(), authorize(Role.ADMIN), professionController.update);
 // DELETE /professions/:id - Delete a profession (ADMIN only)

@@ -7,6 +7,7 @@ import { WorkerStatus } from '@prisma/client';
 import { ListWorkersUseCase, ApproveWorkerUseCase, RejectWorkerUseCase, ActivateUserUseCase, DeactivateUserUseCase, BanUserUseCase, UnbanUserUseCase, SoftDeleteUserUseCase, RestoreUserUseCase, } from '../application/index.js';
 import { userRepository } from '../../user/infrastructure/index.js';
 import { sendSuccess, sendError } from '../../../shared/utils/index.js';
+import { getPaginationMetadata } from '../../../shared/middleware/pagination.middleware.js';
 /**
  * Admin Controller
  *
@@ -45,14 +46,16 @@ export class AdminController {
     /**
      * Lister les travailleurs avec filtre optionnel par statut
      * GET /api/admin/workers?status=PENDING|APPROVED|REJECTED
+     *
+     * Pagination handled by middleware: page, pageSize
      */
     async listWorkers(req, res, next) {
         try {
-            // Extraire les paramètres de requête
+            // Extract query parameters
             const statusParam = req.query.status;
-            const skip = parseInt(req.query.skip, 10) || 0;
-            const take = parseInt(req.query.take, 10) || 20;
-            // Convertir le statut si fourni
+            // Use pagination params from middleware (already validated and capped)
+            const { page, pageSize, skip, take } = req.pagination;
+            // Convert status if provided
             let status;
             if (statusParam) {
                 if (!Object.values(WorkerStatus).includes(statusParam)) {
@@ -60,17 +63,18 @@ export class AdminController {
                 }
                 status = statusParam;
             }
-            // Appeler le use case
+            // Call the use case
             const result = await this.listWorkersUseCase.execute({
                 status,
                 skip,
                 take,
             });
-            // Formater la réponse
+            // Generate standardized pagination metadata
+            const pagination = getPaginationMetadata(page, pageSize, result.total);
+            // Format response
             return sendSuccess(res, 'Liste des travailleurs récupérée avec succès.', {
                 workers: result.users.map((user) => user.toResponse()),
-                total: result.total,
-                status: result.status,
+                pagination,
             });
         }
         catch (error) {

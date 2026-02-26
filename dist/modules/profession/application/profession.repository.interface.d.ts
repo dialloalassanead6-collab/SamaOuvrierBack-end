@@ -14,9 +14,14 @@ export interface IProfessionRepository {
      */
     findByName(name: string): Promise<Profession | null>;
     /**
-     * Find all professions ordered by name
+     * Find all professions with pagination
+     * @param skip - Number of records to skip
+     * @param take - Number of records to take
      */
-    findAll(): Promise<Profession[]>;
+    findAll(skip?: number, take?: number): Promise<{
+        professions: Profession[];
+        total: number;
+    }>;
     /**
      * Create a new profession
      */

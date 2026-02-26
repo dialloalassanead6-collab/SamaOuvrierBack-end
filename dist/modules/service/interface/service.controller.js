@@ -2,6 +2,7 @@
 // Handles HTTP requests and responses
 import { AddServiceUseCase, GetServicesUseCase, GetServiceByIdUseCase, UpdateServiceUseCase, DeleteServiceUseCase, } from '../application/index.js';
 import { serviceRepository } from '../infrastructure/index.js';
+import { getPaginationMetadata } from '../../../shared/middleware/pagination.middleware.js';
 /**
  * Service Controller
  */
@@ -21,17 +22,24 @@ export class ServiceController {
     /**
      * Create a new service
      * POST /services
+     *
+     * SECURITY: Requires WORKER role (authenticated)
+     * The workerId is taken from req.user.sub (JWT), not from request body
      */
     async create(req, res, next) {
         try {
-            const { title, description, minPrice, maxPrice, workerId } = req.body;
+            const { title, description, minPrice, maxPrice } = req.body;
+            const workerId = req.user?.sub; // From JWT
+            if (!workerId) {
+                res.status(401).json({ error: 'Identifiant utilisateur manquant' });
+                return;
+            }
             const service = await this.addServiceUseCase.execute({
                 title,
                 description,
                 minPrice,
                 maxPrice,
-                workerId,
-            });
+            }, workerId);
             res.status(201).json(service);
         }
         catch (error) {
@@ -41,21 +49,21 @@ export class ServiceController {
     /**
      * Get all services
      * GET /services
+     *
+     * SECURITY: Public access (no authentication required)
+     * Pagination is mandatory and handled by pagination middleware
      */
     async getAll(req, res, next) {
         try {
-            const page = Number(req.query['page']) || 1;
-            const pageSize = Number(req.query['pageSize']) || 10;
+            // Use pagination params from middleware (already validated and capped)
+            const { page, pageSize, skip, take } = req.pagination;
             const workerId = req.query['workerId'];
-            const { services, total } = await this.getServicesUseCase.execute(workerId, page, pageSize);
+            const { services, total } = await this.getServicesUseCase.execute(workerId, skip, take);
+            // Generate standardized pagination metadata
+            const pagination = getPaginationMetadata(page, pageSize, total);
             res.status(200).json({
-                services,
-                pagination: {
-                    page,
-                    limit: pageSize,
-                    total,
-                    totalPages: Math.ceil(total / pageSize),
-                },
+                data: services,
+                pagination,
             });
         }
         catch (error) {
@@ -65,6 +73,8 @@ export class ServiceController {
     /**
      * Get service by ID
      * GET /services/:id
+     *
+     * SECURITY: Public access (no authentication required)
      */
     async getById(req, res, next) {
         try {
@@ -79,17 +89,26 @@ export class ServiceController {
     /**
      * Update service
      * PUT /services/:id
+     *
+     * SECURITY:
+     * - WORKER: Can only update their own services
+     * - ADMIN: Can update any service
+     * - CLIENT: Cannot update services (403)
+     *
+     * The userId and userRole are taken from JWT, not from request body
      */
     async update(req, res, next) {
         try {
             const { id } = req.params;
             const { title, description, minPrice, maxPrice } = req.body;
-            const workerId = req.body.workerId;
-            if (!workerId) {
-                res.status(400).json({ error: 'workerId is required' });
+            // Get user info from JWT (set by authenticate middleware)
+            const userId = req.user?.sub;
+            const userRole = req.user?.role;
+            if (!userId || !userRole) {
+                res.status(401).json({ error: 'Informations utilisateur manquantes' });
                 return;
             }
-            const service = await this.updateServiceUseCase.execute(id, workerId, {
+            const service = await this.updateServiceUseCase.execute(id, userId, userRole, {
                 title,
                 description,
                 minPrice,
@@ -104,17 +123,26 @@ export class ServiceController {
     /**
      * Delete service
      * DELETE /services/:id
+     *
+     * SECURITY:
+     * - WORKER: Can only delete their own services
+     * - ADMIN: Can delete any service
+     * - CLIENT: Cannot delete services (403)
+     *
+     * The userId and userRole are taken from JWT, not from request body
      */
     async delete(req, res, next) {
         try {
             const { id } = req.params;
-            const workerId = req.body.workerId;
-            if (!workerId) {
-                res.status(400).json({ error: 'workerId is required' });
+            // Get user info from JWT (set by authenticate middleware)
+            const userId = req.user?.sub;
+            const userRole = req.user?.role;
+            if (!userId || !userRole) {
+                res.status(401).json({ error: 'Informations utilisateur manquantes' });
                 return;
             }
-            await this.deleteServiceUseCase.execute(id, workerId);
-            res.status(200).json({ message: 'Service deleted successfully' });
+            await this.deleteServiceUseCase.execute(id, userId, userRole);
+            res.status(200).json({ message: 'Service supprimé avec succès' });
         }
         catch (error) {
             next(error);

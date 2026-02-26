@@ -8,8 +8,11 @@ export declare class GetServicesUseCase {
     constructor(serviceRepository: IServiceRepository);
     /**
      * Execute the use case
+     * @param workerId - Optional worker ID to filter services
+     * @param skip - Number of records to skip (calculated from page in controller)
+     * @param take - Number of records to take (pageSize)
      */
-    execute(workerId: string | undefined, page?: number, pageSize?: number): Promise<{
+    execute(workerId: string | undefined, skip?: number, take?: number): Promise<{
         services: ServiceResponse[];
         total: number;
     }>;

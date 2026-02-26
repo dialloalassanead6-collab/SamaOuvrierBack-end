@@ -18,9 +18,12 @@ export declare class PrismaProfessionRepository implements IProfessionRepository
      */
     findByName(name: string): Promise<Profession | null>;
     /**
-     * Find all professions ordered by name
+     * Find all professions with pagination
      */
-    findAll(): Promise<Profession[]>;
+    findAll(skip?: number, take?: number): Promise<{
+        professions: Profession[];
+        total: number;
+    }>;
     /**
      * Create a new profession
      */

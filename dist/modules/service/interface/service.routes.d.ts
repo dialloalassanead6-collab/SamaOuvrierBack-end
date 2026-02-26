@@ -19,7 +19,6 @@
  *             description: "Installation complete de plomberie pour maison"
  *             minPrice: 50000
  *             maxPrice: 500000
- *             workerId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
  *     responses:
  *       201:
  *         description: Service cree
@@ -31,10 +30,12 @@
  *         description: Donnees invalides
  *       401:
  *         description: Non authentifie
+ *       403:
+ *         description: Acces refuse (reserve aux workers)
  *
  *   get:
  *     summary: Liste des services
- *     description: Recupere la liste des services avec pagination optionnelle
+ *     description: Recupere la liste des services avec pagination obligatoire
  *     tags:
  *       - Services
  *     parameters:
@@ -60,7 +61,7 @@
  *       200:
  *         description: Liste des services
  *       401:
- *         description: Non authentifie
+ *         description: Non authentifie (ne devrait pas arriver pour routes publiques)
  *
  * /services/{id}:
  *   get:
@@ -84,13 +85,13 @@
  *             schema:
  *               $ref: '#/components/schemas/Service'
  *       401:
- *         description: Non authentifie
+ *         description: Non authentifie (ne devrait pas arriver pour routes publiques)
  *       404:
  *         description: Service introuvable
  *
  *   put:
  *     summary: Modifier un service
- *     description: Met a jour les informations d'un service
+ *     description: Met a jour les informations d'un service (proprietaire ou admin uniquement)
  *     tags:
  *       - Services
  *     security:
@@ -113,17 +114,17 @@
  *       200:
  *         description: Service mis a jour
  *       400:
- *         description: Donnees invalides (workerId requis)
+ *         description: Donnees invalides
  *       401:
  *         description: Non authentifie
  *       403:
- *         description: Acces refuse (pas le proprietaire)
+ *         description: Acces refuse (pas le proprietaire ni admin)
  *       404:
  *         description: Service introuvable
  *
  *   delete:
  *     summary: Supprimer un service
- *     description: Supprime un service (proprietaire uniquement)
+ *     description: Supprime un service (proprietaire ou admin uniquement)
  *     tags:
  *       - Services
  *     security:
@@ -139,12 +140,10 @@
  *     responses:
  *       200:
  *         description: Service supprime
- *       400:
- *         description: Donnees invalides (workerId requis)
  *       401:
  *         description: Non authentifie
  *       403:
- *         description: Acces refuse
+ *         description: Acces refuse (pas le proprietaire ni admin)
  *       404:
  *         description: Service introuvable
  */

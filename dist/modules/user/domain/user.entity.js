@@ -66,6 +66,43 @@ export class User {
         return this.role === Role.WORKER;
     }
     /**
+     * Check if worker can reapply for validation
+     *
+     * BUSINESS RULE: A worker can reapply ONLY if:
+     * - workerStatus === REJECTED
+     * - isBanned === false
+     * - deletedAt === null
+     *
+     * Returns an object with the result and reason for logging/debugging
+     */
+    canReapply() {
+        // Must be a worker
+        if (!this.isWorker()) {
+            return { canReapply: false, reason: 'L\'utilisateur n\'est pas un travailleur' };
+        }
+        // Check if banned
+        if (this.isBanned === true) {
+            return { canReapply: false, reason: 'Le travailleur est banni' };
+        }
+        // Check if soft-deleted
+        if (this.deletedAt !== null) {
+            return { canReapply: false, reason: 'Le compte est supprimé' };
+        }
+        // Check if already approved
+        if (this.workerStatus === WorkerStatus.APPROVED) {
+            return { canReapply: false, reason: 'Le travailleur est déjà approuvé' };
+        }
+        // Check if already pending
+        if (this.workerStatus === WorkerStatus.PENDING) {
+            return { canReapply: false, reason: 'Le travailleur est déjà en attente de validation' };
+        }
+        // Must be rejected to reapply
+        if (this.workerStatus !== WorkerStatus.REJECTED) {
+            return { canReapply: false, reason: 'Le statut du travailleur n\'est pas REJECTED' };
+        }
+        return { canReapply: true };
+    }
+    /**
      * Convert to plain object for response (excludes password)
      */
     toResponse() {

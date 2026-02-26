@@ -2,8 +2,7 @@
 import { Router } from 'express';
 import { Role } from '@prisma/client';
 import { userController } from './user.controller.js';
-import { authenticate } from '../../../shared/middleware/authenticate.middleware.js';
-import { authorize } from '../../../shared/middleware/authorize.middleware.js';
+import { authenticate, authorize, pagination } from '../../../shared/middleware/index.js';
 /**
  * @swagger
  * /users:
@@ -165,8 +164,8 @@ router.use(authenticate());
 router.use(authorize(Role.ADMIN));
 // POST /users - Create a new user
 router.post('/', (req, res, next) => userController.create(req, res, next));
-// GET /users - Get all users
-router.get('/', (req, res, next) => userController.getAll(req, res, next));
+// GET /users - Get all users (with pagination)
+router.get('/', pagination(), (req, res, next) => userController.getAll(req, res, next));
 // GET /users/:id - Get user by ID
 router.get('/:id', (req, res, next) => userController.getById(req, res, next));
 // PUT /users/:id - Update user
