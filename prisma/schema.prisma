@@ -1,0 +1,121 @@
+// ============================================================
+// Prisma Schema - Production Ready
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum Role {
+  ADMIN  @map("admin")
+  CLIENT @map("client")
+  WORKER @map("worker")
+
+  @@map("roles")
+}
+
+enum WorkerStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+
+  @@map("worker_statuses")
+}
+
+// ============================================================
+// Profession Model
+// ============================================================
+
+model Profession {
+  id          String   @id @default(uuid()) @map("id")
+  name        String   @unique @map("name") @db.VarChar(100)
+  description String?  @map("description") @db.Text
+  
+  // Relations
+  users       User[]
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("professions")
+}
+
+// ============================================================
+// User Model - Complete user model with worker profile
+// ============================================================
+
+model User {
+  id        String   @id @default(uuid()) @map("id")
+  nom       String   @map("nom") @db.VarChar(100)
+  prenom    String   @map("prenom") @db.VarChar(100)
+  adresse   String   @map("adresse") @db.VarChar(255)
+  tel       String   @map("tel") @db.VarChar(20)
+  email     String   @unique @map("email") @db.VarChar(255)
+  password  String   @map("password") @db.VarChar(255)
+  
+  // Role management
+  role          Role         @default(CLIENT) @map("role")
+  workerStatus  WorkerStatus? @map("worker_status") // Only for WORKER role
+  rejectionReason String?    @map("rejection_reason") @db.Text // Only when workerStatus === REJECTED
+  
+  // Admin management fields
+  isActive      Boolean      @default(true) @map("is_active")
+  isBanned      Boolean      @default(false) @map("is_banned")
+  deletedAt     DateTime?    @map("deleted_at")
+  
+  // Foreign Keys
+  professionId  String?      @map("profession_id")
+  profession    Profession?  @relation(fields: [professionId], references: [id], onDelete: SetNull)
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  services Service[]
+
+  // Indexes
+  @@index([role])
+  @@index([email])
+  @@index([workerStatus])
+
+  @@map("users")
+}
+
+// ============================================================
+// Service Model - Services proposed by workers
+// ============================================================
+
+model Service {
+  id          String   @id @default(uuid()) @map("id")
+  title       String   @map("title") @db.VarChar(200)
+  description String   @map("description") @db.Text
+  minPrice    Decimal  @map("min_price") @db.Decimal(10, 2)
+  maxPrice    Decimal  @map("max_price") @db.Decimal(10, 2)
+  
+  // Foreign Key
+  workerId    String   @map("worker_id")
+  worker      User     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Contrainte: un titre unique par worker
+  @@unique([workerId, title], name: "service_worker_title_unique")
+  
+  // Index pour requêtes
+  @@index([workerId])
+
+  @@map("services")
+}

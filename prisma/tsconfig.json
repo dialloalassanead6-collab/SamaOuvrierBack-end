@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    // Same as main tsconfig but with prisma folder
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ESNext"],
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "paths": {
+      "@prisma/client": ["../node_modules/@prisma/client"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
+}

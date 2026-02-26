@@ -1,0 +1,178 @@
+// Domain Layer - Service Entity
+// Represents the core business object "Service" with its rules and invariants
+
+import type { Service as PrismaService } from '@prisma/client';
+
+/**
+ * Service Entity - Core domain object
+ * 
+ * RESPONSABILITIES:
+ * - Represent a service offered by a worker
+ * - Encapsulate service-related business rules
+ * - Be independent of any framework
+ * 
+ * INVARIANTS:
+ * - Title must be at least 3 characters
+ * - Description must be at least 10 characters
+ * - minPrice must be >= 0
+ * - maxPrice must be >= minPrice
+ */
+export class Service {
+  public readonly id: string;
+  public readonly title: string;
+  public readonly description: string;
+  public readonly minPrice: number;
+  public readonly maxPrice: number;
+  public readonly workerId: string;
+  public readonly createdAt: Date;
+  public readonly updatedAt: Date;
+
+  constructor(props: ServiceProps) {
+    // Validate invariants in constructor
+    this.validateTitle(props.title);
+    this.validateDescription(props.description);
+    this.validatePriceRange(props.minPrice, props.maxPrice);
+
+    this.id = props.id;
+    this.title = props.title;
+    this.description = props.description;
+    this.minPrice = props.minPrice;
+    this.maxPrice = props.maxPrice;
+    this.workerId = props.workerId;
+    this.createdAt = props.createdAt;
+    this.updatedAt = props.updatedAt;
+  }
+
+  /**
+   * Validate title invariant
+   */
+  private validateTitle(title: string): void {
+    if (title.length < 3) {
+      throw new Error('Title must be at least 3 characters');
+    }
+  }
+
+  /**
+   * Validate description invariant
+   */
+  private validateDescription(description: string): void {
+    if (description.length < 10) {
+      throw new Error('Description must be at least 10 characters');
+    }
+  }
+
+  /**
+   * Validate price range invariant
+   */
+  private validatePriceRange(minPrice: number, maxPrice: number): void {
+    if (minPrice < 0) {
+      throw new Error('Minimum price must be >= 0');
+    }
+    if (maxPrice < minPrice) {
+      throw new Error('Maximum price must be >= minimum price');
+    }
+  }
+
+  /**
+   * Check if this service belongs to a specific worker
+   */
+  belongsToWorker(workerId: string): boolean {
+    return this.workerId === workerId;
+  }
+
+  /**
+   * Convert to plain object for response
+   */
+  toResponse(): ServiceResponse {
+    return {
+      id: this.id,
+      title: this.title,
+      description: this.description,
+      minPrice: this.minPrice,
+      maxPrice: this.maxPrice,
+      workerId: this.workerId,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+
+  /**
+   * Create Service from Prisma entity (Factory method)
+   */
+  static fromPrisma(service: PrismaService): Service {
+    return new Service({
+      id: service.id,
+      title: service.title,
+      description: service.description,
+      minPrice: Number(service.minPrice),
+      maxPrice: Number(service.maxPrice),
+      workerId: service.workerId,
+      createdAt: service.createdAt,
+      updatedAt: service.updatedAt,
+    });
+  }
+}
+
+/**
+ * Service properties interface
+ */
+export interface ServiceProps {
+  id: string;
+  title: string;
+  description: string;
+  minPrice: number;
+  maxPrice: number;
+  workerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Service response DTO
+ */
+export interface ServiceResponse {
+  id: string;
+  title: string;
+  description: string;
+  minPrice: number;
+  maxPrice: number;
+  workerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Service create input DTO
+ */
+export interface CreateServiceInput {
+  title: string;
+  description: string;
+  minPrice: number;
+  maxPrice: number;
+  workerId: string;
+}
+
+/**
+ * Service update input DTO
+ */
+export interface UpdateServiceInput {
+  title?: string | undefined;
+  description?: string | undefined;
+  minPrice?: number | undefined;
+  maxPrice?: number | undefined;
+}
+
+/**
+ * Service with worker details
+ */
+export interface ServiceWithWorker extends ServiceResponse {
+  worker: {
+    id: string;
+    name: string;
+    email: string;
+    profession: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
+}
