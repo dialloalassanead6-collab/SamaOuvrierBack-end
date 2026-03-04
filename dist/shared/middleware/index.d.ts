@@ -8,4 +8,7 @@ export { pagination, getPaginationMetadata } from './pagination.middleware.js';
 export type { PaginationParams, PaginationOptions } from './pagination.middleware.js';
 export { createRateLimitMiddleware, createAuthRateLimiter } from './rate-limit.middleware.js';
 export type { RateLimitOptions } from './rate-limit.middleware.js';
+export { verifyMissionOwnership } from './verify-mission-ownership.middleware.js';
+export type { MissionOwnershipOptions } from './verify-mission-ownership.middleware.js';
+export { validateRequest } from './validate-request.middleware.js';
 //# sourceMappingURL=index.d.ts.map

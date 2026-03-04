@@ -32,6 +32,66 @@ enum WorkerStatus {
 }
 
 // ============================================================
+// Mission Status Enum
+// ============================================================
+
+enum MissionStatus {
+  // Création initiale - en attente de paiement
+  PENDING_PAYMENT         @map("pending_payment")
+  
+  // Paiement initial confirmé - en attente d'acceptation par le worker
+  PENDING_ACCEPT         @map("pending_accept")
+  
+  // Worker a accepté - contact débloqué
+  CONTACT_UNLOCKED       @map("contact_unlocked")
+  
+  // Négociation terminée
+  NEGOTIATION_DONE       @map("negotiation_done")
+  
+  // En attente du paiement final (si prixFinal > prixMin)
+  AWAITING_FINAL_PAYMENT @map("awaiting_final_payment")
+  
+  // Mission en cours
+  IN_PROGRESS            @map("in_progress")
+  
+  // Mission terminée (après double confirmation)
+  COMPLETED              @map("completed")
+  
+  // Annulation en cours
+  CANCEL_REQUESTED       @map("cancel_requested")
+  
+  // Annulée
+  CANCELLED              @map("cancelled")
+  
+  // Refusée par le worker
+  REFUSED                @map("refused")
+
+  @@map("mission_statuses")
+}
+
+// ============================================================
+// Cancellation Requester Enum
+// ============================================================
+
+enum CancellationRequester {
+  CLIENT @map("client")
+  WORKER @map("worker")
+
+  @@map("cancellation_requesters")
+}
+
+// ============================================================
+// Review Status Enum
+// ============================================================
+
+enum ReviewStatus {
+  PENDING @map("pending")
+  DONE    @map("done")
+
+  @@map("review_statuses")
+}
+
+// ============================================================
 // Profession Model
 // ============================================================
 
@@ -73,6 +133,20 @@ model User {
   isBanned      Boolean      @default(false) @map("is_banned")
   deletedAt     DateTime?    @map("deleted_at")
   
+  // Avatar
+  avatar        String?      @map("avatar") @db.VarChar(500)
+  
+  // Worker documents - Identity card (REQUIRED for workers)
+  identityCardRecto   String?  @map("identity_card_recto") @db.VarChar(500)
+  identityCardVerso   String?  @map("identity_card_verso") @db.VarChar(500)
+  
+  // Worker documents - Diploma/Certificate (OPTIONAL for workers)
+  diploma              String?  @map("diploma") @db.VarChar(500)
+  
+  // Worker rating fields
+  averageRating Float        @default(0) @map("average_rating")
+  totalReviews  Int          @default(0) @map("total_reviews")
+  
   // Foreign Keys
   professionId  String?      @map("profession_id")
   profession    Profession?  @relation(fields: [professionId], references: [id], onDelete: SetNull)
@@ -83,6 +157,14 @@ model User {
 
   // Relations
   services Service[]
+  missionsAsClient   Mission[] @relation("MissionClient")
+  missionsAsWorker  Mission[] @relation("MissionWorker")
+  disputesAsReporter   Dispute[] @relation("DisputeReporter")
+  disputesAsReported  Dispute[] @relation("DisputeReported")
+  
+  // Reviews relations
+  reviewsAsWorker Review[] @relation("WorkerReviews")
+  reviewsAsClient Review[] @relation("ClientReviews")
 
   // Indexes
   @@index([role])
@@ -117,5 +199,422 @@ model Service {
   // Index pour requêtes
   @@index([workerId])
 
+  // Relations
+  missions Mission[]
+
   @@map("services")
+}
+
+// ============================================================
+// Mission Model - Contract between client and worker
+// ============================================================
+
+model Mission {
+  id             String       @id @default(uuid()) @map("id")
+  
+  // Foreign Keys
+  clientId       String       @map("client_id")
+  workerId       String       @map("worker_id")
+  serviceId      String       @map("service_id")
+  
+  // Relations
+  client         User         @relation("MissionClient", fields: [clientId], references: [id], onDelete: Cascade)
+  worker         User         @relation("MissionWorker", fields: [workerId], references: [id], onDelete: Cascade)
+  service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  
+  // Pricing
+  prixMin        Decimal      @map("prix_min") @db.Decimal(10, 2)
+  prixMax        Decimal      @map("prix_max") @db.Decimal(10, 2)
+  prixFinal      Decimal?     @map("prix_final") @db.Decimal(10, 2)
+  montantRestant Decimal?     @map("montant_restant") @db.Decimal(10, 2)
+  
+  // Cancellation - pour futur module Escrow/Dispute
+  cancellationRequestedBy CancellationRequester? @map("cancellation_requested_by")
+  
+  // Double confirmation pour completion
+  clientConfirmed Boolean @default(false) @map("client_confirmed")
+  workerConfirmed Boolean @default(false) @map("worker_confirmed")
+  
+  // Status
+  status         MissionStatus @default(PENDING_PAYMENT) @map("status")
+  
+  // Review Status
+  reviewStatus   ReviewStatus  @default(PENDING) @map("review_status")
+  
+  // Timestamps
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  
+  // Relations - Payment & Escrow
+  payments       Payment[]
+  escrow         Escrow?
+  disputes       Dispute[]
+  
+  // Review relation
+  review         Review?
+  
+  // Indexes for performance
+  @@index([clientId])
+  @@index([workerId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([createdAt])
+  
+  @@map("missions")
+}
+
+// ============================================================================
+// PAYMENT STATUS ENUM
+// ============================================================================
+
+enum PaymentStatus {
+  PENDING   @map("pending")
+  SUCCESS   @map("success")
+  FAILED    @map("failed")
+  REFUNDED  @map("refunded")
+  CANCELLED @map("cancelled")
+
+  @@map("payment_statuses")
+}
+
+// ============================================================================
+// ESCROW STATUS ENUM
+// ============================================================================
+
+enum EscrowStatus {
+  PENDING           @map("pending")
+  HELD              @map("held")
+  RELEASED          @map("released")
+  REFUNDED          @map("refunded")
+  PARTIALLY_REFUNDED @map("partially_refunded")
+
+  @@map("escrow_statuses")
+}
+
+// ============================================================================
+// PAYMENT MODEL
+// ============================================================================
+
+model Payment {
+  id            String        @id @default(uuid()) @map("id")
+  missionId     String        @map("mission_id")
+  clientId      String        @map("client_id")
+  workerId      String        @map("worker_id")
+  amount        Decimal       @map("amount") @db.Decimal(10, 2)
+  currency      String        @default("XOF") @map("currency") @db.VarChar(3)
+  status        PaymentStatus @default(PENDING) @map("status")
+  paymentMethod String?       @map("payment_method") @db.VarChar(50)
+  paytechRef    String?       @map("paytech_ref") @db.VarChar(255)
+  idempotencyKey String       @unique @map("idempotency_key") @db.VarChar(255)
+  metadata      Json?         @map("metadata")
+  
+  // Relations
+  mission       Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  escrow        Escrow?
+  
+  // Timestamps
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  
+  // Indexes
+  @@index([missionId])
+  @@index([clientId])
+  @@index([workerId])
+  @@index([status])
+  @@index([paytechRef])
+  
+  @@map("payments")
+}
+
+// ============================================================================
+// ESCROW MODEL
+// ============================================================================
+
+model Escrow {
+  id              String        @id @default(uuid()) @map("id")
+  paymentId       String        @unique @map("payment_id")
+  missionId       String        @unique @map("mission_id")
+  amount          Decimal       @map("amount") @db.Decimal(10, 2)
+  workerAmount    Decimal       @map("worker_amount") @db.Decimal(10, 2)
+  commissionAmount Decimal      @map("commission_amount") @db.Decimal(10, 2)
+  status          EscrowStatus  @default(PENDING) @map("status")
+  releaseType     String?       @map("release_type") @db.VarChar(50) // FULL, PARTIAL_CLIENT, PARTIAL_WORKER
+  paytechRef      String?       @map("paytech_ref") @db.VarChar(255)
+  
+  // Traçabilité
+  releasedBy      String?       @map("released_by") @db.VarChar(50) // CLIENT, WORKER, SYSTEM
+  releaseReason   String?       @map("release_reason") @db.VarChar(255)
+  
+  // Optimistic Locking - Version pour éviter double libération
+  version         Int           @default(0) @map("version")
+  
+  // Relations
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  mission         Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  releasedAt      DateTime?     @map("released_at")
+  
+  // Indexes
+  @@index([missionId])
+  @@index([status])
+  
+  @@map("escrows")
+}
+
+// ============================================================================
+// DISPUTE STATUS ENUM
+// ============================================================================
+
+enum DisputeStatus {
+  PENDING      @map("pending")
+  OPEN         @map("open")
+  UNDER_REVIEW @map("under_review")
+  RESOLVED     @map("resolved")
+  CLOSED       @map("closed")
+
+  @@map("dispute_statuses")
+}
+
+// ============================================================================
+// DISPUTE REASON ENUM
+// ============================================================================
+
+enum DisputeReason {
+  PAYMENT_ISSUE          @map("payment_issue")
+  WORK_NOT_DONE         @map("work_not_done")
+  QUALITY_UNSATISFACTORY @map("quality_unsatisfactory")
+  NO_SHOW               @map("no_show")
+  CANCELLATION_ISSUE    @map("cancellation_issue")
+  COMMUNICATION_ISSUE   @map("communication_issue")
+  OTHER                 @map("other")
+
+  @@map("dispute_reasons")
+}
+
+// ============================================================================
+// DISPUTE RESOLUTION ENUM
+// ============================================================================
+
+enum DisputeResolution {
+  CLIENT_WINS     @map("client_wins")
+  WORKER_WINS     @map("worker_wins")
+  PARTIAL_REFUND  @map("partial_refund")
+  FULL_REFUND     @map("full_refund")
+  NO_REFUND       @map("no_refund")
+  DRAW            @map("draw")
+
+  @@map("dispute_resolutions")
+}
+
+// ============================================================================
+// DISPUTE EVIDENCE MODEL
+// ============================================================================
+
+model DisputeEvidence {
+  id          String   @id @default(uuid()) @map("id")
+  disputeId   String   @map("dispute_id")
+  url         String   @map("url")
+  publicId    String   @unique @map("public_id")
+  type        String   @map("type") // image, video, document
+  mimeType    String?  @map("mime_type")
+  size        Int?     @map("size")
+  description String?  @map("description")
+  uploadedBy  String   @map("uploaded_by")
+  
+  // Relations
+  dispute     Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Indexes
+  @@index([disputeId])
+  
+  @@map("dispute_evidences")
+}
+
+// ============================================================================
+// DISPUTE EVENT MODEL - Audit Trail
+// ============================================================================
+
+model DisputeEvent {
+  id          String   @id @default(uuid()) @map("id")
+  disputeId   String   @map("dispute_id")
+  type        String   @map("type") @db.VarChar(100)
+  performedBy String   @map("performed_by")
+  metadata    Json?    @map("metadata")
+  
+  // Relations
+  dispute     Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Indexes
+  @@index([disputeId])
+  @@index([type])
+  @@index([performedBy])
+  
+  @@map("dispute_events")
+}
+
+// ============================================================================
+// DISPUTE MODEL
+// ============================================================================
+
+model Dispute {
+  id              String           @id @default(uuid()) @map("id")
+  missionId      String           @map("mission_id")
+  reporterId     String           @map("reporter_id")
+  reportedUserId String           @map("reported_user_id")
+  
+  // Dispute details
+  reason         DisputeReason    @map("reason")
+  description    String           @map("description") @db.Text
+  status         DisputeStatus    @default(PENDING) @map("status")
+  
+  // Resolution
+  resolution      DisputeResolution? @map("resolution")
+  resolutionNote String?          @map("resolution_note") @db.Text
+  resolvedBy     String?          @map("resolved_by")
+  
+  // Timestamps
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  resolvedAt     DateTime?        @map("resolved_at")
+  deletedAt      DateTime?        @map("deleted_at")
+  
+  // Relations
+  mission        Mission           @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  reporter       User              @relation("DisputeReporter", fields: [reporterId], references: [id])
+  reportedUser   User              @relation("DisputeReported", fields: [reportedUserId], references: [id])
+  evidences      DisputeEvidence[]
+  events         DisputeEvent[]
+  
+  // Constraints
+  @@unique([missionId, reporterId], name: "dispute_mission_reporter_unique")
+  
+  // Indexes
+  @@index([missionId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([reportedUserId])
+  
+  @@map("disputes")
+}
+
+// ============================================================================
+// REVIEW MODEL
+// ============================================================================
+
+model Review {
+  id        String   @id @default(uuid()) @map("id")
+  missionId String   @unique @map("mission_id")
+  workerId  String   @map("worker_id")
+  clientId  String   @map("client_id")
+  
+  // Review content
+  rating    Int      @map("rating")
+  comment   String?  @map("comment") @db.Text
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  worker    User     @relation("WorkerReviews", fields: [workerId], references: [id])
+  client    User     @relation("ClientReviews", fields: [clientId], references: [id])
+  
+  // Indexes
+  @@index([workerId])
+  @@index([clientId])
+  
+  @@map("reviews")
+}
+
+// ============================================================================
+// NOTIFICATION ENUMS
+// ============================================================================
+
+enum NotificationType {
+  // Compte utilisateur
+  ACCOUNT_CREATED           @map("account_created")
+  ACCOUNT_PENDING_APPROVAL @map("account_pending_approval")
+  ACCOUNT_APPROVED         @map("account_approved")
+  ACCOUNT_REJECTED         @map("account_rejected")
+  
+  // Missions
+  MISSION_CREATED          @map("mission_created")
+  MISSION_ACCEPTED         @map("mission_accepted")
+  MISSION_REFUSED          @map("mission_refused")
+  MISSION_COMPLETED        @map("mission_completed")
+  MISSION_CANCELLED        @map("mission_cancelled")
+  
+  // Paiements
+  PAYMENT_RECEIVED         @map("payment_received")
+  PAYMENT_RELEASED         @map("payment_released")
+  PAYMENT_REFUNDED         @map("payment_refunded")
+  
+  // Disputes
+  DISPUTE_OPENED           @map("dispute_opened")
+  DISPUTE_STATUS_UPDATED   @map("dispute_status_updated")
+  DISPUTE_RESOLVED         @map("dispute_resolved")
+  
+  // Reviews
+  REVIEW_RECEIVED          @map("review_received")
+  
+  // Système
+  SYSTEM_NOTIFICATION      @map("system_notification")
+
+  @@map("notification_types")
+}
+
+enum NotificationStatus {
+  UNREAD @map("unread")
+  READ   @map("read")
+
+  @@map("notification_statuses")
+}
+
+// ============================================================================
+// NOTIFICATION MODEL
+// ============================================================================
+
+model Notification {
+  id          String             @id @default(uuid()) @map("id")
+  
+  // Destinataire
+  userId      String             @map("user_id")
+  
+  // Contenu
+  type        NotificationType   @map("type")
+  title       String             @map("title") @db.VarChar(200)
+  message     String             @map("message") @db.Text
+  
+  // Statut
+  status      NotificationStatus @default(UNREAD) @map("status")
+  readAt      DateTime?          @map("read_at")
+  
+  // Lien vers l'entité associée (mission, payment, dispute, etc.)
+  relatedId   String?            @map("related_id")
+  relatedType String?            @map("related_type") // mission, payment, dispute, review
+  
+  // Tracking pour future intégration push/email
+  pushSent    Boolean            @default(false) @map("push_sent")
+  emailSent   Boolean            @default(false) @map("email_sent")
+  
+  // Timestamps
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  
+  // Index pour performance
+  @@index([userId])
+  @@index([userId, status])
+  @@index([createdAt])
+  @@index([relatedId, relatedType])
+  
+  @@map("notifications")
 }

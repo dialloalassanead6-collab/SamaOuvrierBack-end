@@ -1,0 +1,4 @@
+# This file helps PostgreSQL-based databases track migration state
+# Please do not edit or remove this file.
+
+provider = "postgresql"

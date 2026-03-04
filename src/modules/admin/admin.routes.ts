@@ -46,13 +46,13 @@ const router = Router();
  *           type: integer
  *           default: 10
  *           maximum: 100
- *         description: Nombre d'éléments par page (max: 100)
+ *         description: "Nombre d'éléments par page (max: 100)"
  *     responses:
  *       200:
  *         description: Liste des travailleurs
  *         content:
  *           application/json:
- *             schema:
+ *             schema:      
  *               type: object
  *               properties:
  *                 success:

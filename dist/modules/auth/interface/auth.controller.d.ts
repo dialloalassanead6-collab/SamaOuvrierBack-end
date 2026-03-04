@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { AuthService } from '../auth.service.js';
-import type { RegisterRequest, LoginRequest } from './auth.validation.js';
+import type { LoginRequest } from './auth.validation.js';
 /**
  * Auth Controller
  *
@@ -16,8 +16,13 @@ export declare class AuthController {
     /**
      * Inscription d'un nouvel utilisateur
      * POST /auth/register
+     *
+     * Pour les WORKERS:
+     * - identityCardRecto: REQUIRED (uploaded file)
+     * - identityCardVerso: REQUIRED (uploaded file)
+     * - diploma: OPTIONAL (uploaded file)
      */
-    register(req: Request<unknown, unknown, RegisterRequest>, res: Response, next: NextFunction): Promise<Response | void>;
+    register(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
     /**
      * Connexion utilisateur
      * POST /auth/login

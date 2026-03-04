@@ -1,5 +1,15 @@
 import type { Role, WorkerStatus } from '@prisma/client';
 /**
+ * Uploaded file metadata (from Cloudinary)
+ * Used in worker registration for identity card and diploma
+ */
+export interface WorkerDocumentMetadata {
+    url: string;
+    publicId: string;
+    format: string;
+    bytes: number;
+}
+/**
  * Registration type sent by client
  */
 export type RegistrationType = 'CLIENT' | 'WORKER';
@@ -83,6 +93,9 @@ export interface ClientRegisterInput {
 }
 /**
  * Input data for worker registration
+ *
+ * ✅ REQUIRED: identityCardRecto, identityCardVerso
+ * ✅ OPTIONAL: diploma
  */
 export interface WorkerRegisterInput {
     type: 'WORKER';
@@ -93,6 +106,9 @@ export interface WorkerRegisterInput {
     email: string;
     password: string;
     professionId: string;
+    identityCardRecto: WorkerDocumentMetadata;
+    identityCardVerso: WorkerDocumentMetadata;
+    diploma?: WorkerDocumentMetadata;
 }
 /**
  * Union type for registration input

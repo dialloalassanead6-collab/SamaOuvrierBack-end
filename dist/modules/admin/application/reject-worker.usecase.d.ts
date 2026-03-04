@@ -1,5 +1,6 @@
 import type { IUserRepository } from '../../user/application/index.js';
 import type { User } from '../../user/domain/index.js';
+import { NotificationService } from '../../notification/index.js';
 /**
  * Paramètres d'entrée pour le use case RejectWorker
  */
@@ -28,10 +29,12 @@ export interface RejectWorkerOutput {
  * - Vérifier que la raison du rejet est fournie
  * - Rejeter le travailleur (workerStatus = REJECTED)
  * - Enregistrer la raison du rejet
+ * -Notifier le worker du rejet
  */
 export declare class RejectWorkerUseCase {
     private readonly userRepository;
-    constructor(userRepository: IUserRepository);
+    private readonly notificationService;
+    constructor(userRepository: IUserRepository, notificationService: NotificationService);
     /**
      * Exécuter le use case
      */

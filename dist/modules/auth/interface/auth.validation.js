@@ -1,6 +1,23 @@
+// ============================================================================
 // Interface Layer - Auth DTOs with Zod Validation
+// ============================================================================
 // Data Transfer Objects for authentication endpoints
+//
+// Worker registration now supports:
+// - REQUIRED: identity card (recto and verso)
+// - OPTIONAL: diploma/certificate
+// ============================================================================
 import { z } from 'zod';
+/**
+ * Schema for uploaded file metadata (from Cloudinary)
+ * This is used after file upload to validate the returned data
+ */
+export const uploadedFileSchema = z.object({
+    url: z.string().url('Invalid URL format'),
+    publicId: z.string().min(1, 'Public ID is required'),
+    format: z.string(),
+    bytes: z.number().positive('File size must be positive'),
+});
 /**
  * Base common fields for registration
  */
@@ -36,6 +53,7 @@ const baseRegisterSchema = z.object({
  * Client registration schema
  * - type = "CLIENT"
  * - professionId is FORBIDDEN (must not be present)
+ * - No document uploads required
  */
 export const clientRegisterSchema = baseRegisterSchema.extend({
     type: z.literal('CLIENT'),
@@ -45,6 +63,9 @@ export const clientRegisterSchema = baseRegisterSchema.extend({
  * Worker registration schema
  * - type = "WORKER"
  * - professionId is REQUIRED
+ * - identityCardRecto: REQUIRED (uploaded file URL)
+ * - identityCardVerso: REQUIRED (uploaded file URL)
+ * - diploma: OPTIONAL (uploaded file URL)
  */
 export const workerRegisterSchema = baseRegisterSchema.extend({
     type: z.literal('WORKER'),
@@ -52,7 +73,12 @@ export const workerRegisterSchema = baseRegisterSchema.extend({
         .string()
         .uuid('Invalid profession ID format')
         .min(1, 'Profession is required for worker registration'),
-});
+    // ✅ REQUIRED: Identity card - both sides
+    identityCardRecto: uploadedFileSchema,
+    identityCardVerso: uploadedFileSchema,
+    // ✅ OPTIONAL: Diploma/Certificate - use .optional() properly
+    diploma: uploadedFileSchema.optional(),
+}).strict();
 /**
  * Union schema for registration (tries client first, then worker)
  */

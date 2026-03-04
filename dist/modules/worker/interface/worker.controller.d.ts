@@ -11,11 +11,20 @@ import type { Request, Response, NextFunction } from 'express';
  * ROUTES PUBLIQUES:
  * - GET /workers/public - Liste des workers publics
  * - GET /workers/:workerId/services - Services d'un worker
+ *
+ * ROUTES PROTÉGÉES (worker connecté):
+ * - GET /workers/me - Mon profil
+ * - GET /workers/me/missions - Mes missions
+ * - GET /workers/me/services - Mes services
+ * - PATCH /workers/me/reapply - Refaire une demande
  */
 export declare class WorkerController {
     private reapplyWorkerUseCase;
     private listPublicWorkersUseCase;
     private listWorkerServicesUseCase;
+    private getMyProfileUseCase;
+    private getMyMissionsUseCase;
+    private getMyServicesUseCase;
     constructor();
     /**
      * Lister les workers publics
@@ -44,6 +53,21 @@ export declare class WorkerController {
      * PATCH /api/workers/me/reapply
      */
     reapply(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
+    /**
+     * Obtenir mon profil
+     * GET /api/workers/me
+     */
+    getMyProfile(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
+    /**
+     * Obtenir mes missions
+     * GET /api/workers/me/missions
+     */
+    getMyMissions(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
+    /**
+     * Obtenir mes services
+     * GET /api/workers/me/services
+     */
+    getMyServices(req: Request, res: Response, next: NextFunction): Promise<Response | void>;
 }
 export declare const workerController: WorkerController;
 //# sourceMappingURL=worker.controller.d.ts.map

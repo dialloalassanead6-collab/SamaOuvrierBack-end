@@ -1,0 +1,3757 @@
+openapi: 3.1.0
+info:
+  title: SamaOuvrier API
+  description: |
+    # API de la plateforme SamaOuvrier
+    
+    Plateforme de mise en relation entre clients et travailleurs qualifiés au Sénégal.
+    
+    ## Fonctionnalités principales
+    
+    - **Authentification**: Inscription et connexion JWT
+    - **Gestion des utilisateurs**: Rôles CLIENT, WORKER, ADMIN
+    - **Missions**: Création, gestion du cycle de vie complet
+    - **Paiements**: Intégration PayTech avec système Escrow
+    - **Disputes**: Gestion des litiges entre clients et workers
+    - **Avis**: Système de notation des travailleurs
+    - **Notifications**: Notifications en temps réel
+    
+    ## Flux de paiement Escrow
+    
+    1. Le client crée une mission
+    2. Le client effectue le paiement initial (prix min)
+    3. Le montant estheld en escrow
+    4. Le worker accepte et complète le travail
+    5. Le client confirme la completion
+    6. Si nécessaire, le paiement final est effectué
+    7. L'escrow est libéré au worker (moins la commission)
+    
+    ## Webhooks PayTech
+    
+    Les paiements sont gérés via le webhook `/api/payments/callback`
+    avec signature de vérification dans l'en-tête `x-paytech-signature`.
+  contact:
+    name: Support SamaOuvrier
+    email: support@samaouvrier.sn
+  license:
+    name: Propriétaire
+    url: https://samaouvrier.sn/licenses
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api
+    description: Serveur de développement
+  - url: https://api.samaouvrier.sn/api
+    description: Serveur de production
+tags:
+  - name: Auth
+    description: Endpoints d'authentification et d'inscription
+  - name: Users
+    description: Gestion des utilisateurs
+  - name: Missions
+    description: Gestion des missions et du cycle de vie
+  - name: Payments
+    description: Paiements et intégration PayTech
+  - name: Escrow
+    description: Gestion des fonds en attente
+  - name: Disputes
+    description: Gestion des litiges
+  - name: Reviews
+    description: Système d'avis et de notation
+  - name: Services
+    description: Services proposés par les workers
+  - name: Dashboard
+    description: Tableaux de bord selon le rôle
+  - name: Admin
+    description: Administration et modération
+  - name: Notifications
+    description: Gestion des notifications
+  - name: Upload
+    description: Upload de fichiers vers Cloudinary
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Jeton JWT d'authentification. Obtenu via `/auth/login`.
+        À inclure dans l'en-tête `Authorization: Bearer <token>`.
+  
+  # ============================================================================
+  # ENUMS
+  # ============================================================================
+  enums:
+    Role:
+      type: string
+      enum: [ADMIN, CLIENT, WORKER]
+      description: |
+        Rôle de l'utilisateur dans le système.
+        - CLIENT: Peut créer des missions
+        - WORKER: Peut accepter des missions
+        - ADMIN: Gestion complète de la plateforme
+    
+    WorkerStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+      description: |
+        Statut de validation d'un worker.
+        - PENDING: En attente d'approbation admin
+        - APPROVED: Validé et peut travailler
+        - REJECTED: Rejeté par l'administrateur
+    
+    MissionStatus:
+      type: string
+      enum:
+        - PENDING_PAYMENT
+        - PENDING_ACCEPT
+        - CONTACT_UNLOCKED
+        - NEGOTIATION_DONE
+        - AWAITING_FINAL_PAYMENT
+        - IN_PROGRESS
+        - COMPLETED
+        - CANCEL_REQUESTED
+        - CANCELLED
+        - REFUSED
+      description: |
+        Statut de la mission.
+        - PENDING_PAYMENT: En attente de paiement initial
+        - PENDING_ACCEPT: En attente d'acceptation du worker
+        - CONTACT_UNLOCKED: Coordonnées débloquées
+        - NEGOTIATION_DONE: Négociation terminée
+        - AWAITING_FINAL_PAYMENT: En attente du paiement final
+        - IN_PROGRESS: Mission en cours
+        - COMPLETED: Mission terminée (double confirmation)
+        - CANCEL_REQUESTED: Annulation demandée
+        - CANCELLED: Annulée
+        - REFUSED: Refusée par le worker
+    
+    PaymentStatus:
+      type: string
+      enum: [PENDING, SUCCESS, FAILED, REFUNDED, CANCELLED]
+      description: |
+        Statut du paiement.
+        - PENDING: En attente
+        - SUCCESS: Réussi
+        - FAILED: Échoué
+        - REFUNDED: Remboursé
+        - CANCELLED: Annulé
+    
+    EscrowStatus:
+      type: string
+      enum: [PENDING, HELD, RELEASED, REFUNDED, PARTIALLY_REFUNDED]
+      description: |
+        Statut de l'escrow.
+        - PENDING: En attente de confirmation
+        - HELD: Fonds bloqués
+        - RELEASED: Fonds libérés au worker
+        - REFUNDED: Remboursé au client
+        - PARTIALLY_REFUNDED: Remboursement partiel
+    
+    DisputeStatus:
+      type: string
+      enum: [PENDING, OPEN, UNDER_REVIEW, RESOLVED, CLOSED]
+      description: |
+        Statut de la dispute.
+        - PENDING: En attente de traitement
+        - OPEN: Ouverte
+        - UNDER_REVIEW: En cours d'examen
+        - RESOLVED: Résolue
+        - CLOSED: Fermée
+    
+    DisputeReason:
+      type: string
+      enum:
+        - PAYMENT_ISSUE
+        - WORK_NOT_DONE
+        - QUALITY_UNSATISFACTORY
+        - NO_SHOW
+        - CANCELLATION_ISSUE
+        - COMMUNICATION_ISSUE
+        - OTHER
+      description: Raison de la dispute.
+    
+    DisputeResolution:
+      type: string
+      enum:
+        - CLIENT_WINS
+        - WORKER_WINS
+        - PARTIAL_REFUND
+        - FULL_REFUND
+        - NO_REFUND
+        - DRAW
+      description: Résultat de la résolution de dispute.
+    
+    NotificationType:
+      type: string
+      enum:
+        - ACCOUNT_CREATED
+        - ACCOUNT_PENDING_APPROVAL
+        - ACCOUNT_APPROVED
+        - ACCOUNT_REJECTED
+        - MISSION_CREATED
+        - MISSION_ACCEPTED
+        - MISSION_REFUSED
+        - MISSION_COMPLETED
+        - MISSION_CANCELLED
+        - PAYMENT_RECEIVED
+        - PAYMENT_RELEASED
+        - PAYMENT_REFUNDED
+        - DISPUTE_OPENED
+        - DISPUTE_STATUS_UPDATED
+        - DISPUTE_RESOLVED
+        - REVIEW_RECEIVED
+        - SYSTEM_NOTIFICATION
+      description: Type de notification.
+    
+    NotificationStatus:
+      type: string
+      enum: [UNREAD, READ]
+      description: Statut de lecture de la notification.
+    
+    ReviewStatus:
+      type: string
+      enum: [PENDING, DONE]
+      description: Statut de l'avis.
+  
+  # ============================================================================
+  # SCHEMAS - Common
+  # ============================================================================
+  schemas:
+    # -------------------------------------------------------------------------
+    # Error Responses
+    # -------------------------------------------------------------------------
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            code:
+              type: string
+      required: [success, error]
+    
+    UnauthorizedError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Authentification échouée"
+        code:
+          type: string
+          example: "AUTH_FAILED"
+      required: [success, message]
+    
+    ForbiddenError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Permissions insuffisantes"
+        code:
+          type: string
+          example: "FORBIDDEN"
+      required: [success, message]
+    
+    NotFoundError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Ressource introuvable"
+        code:
+          type: string
+          example: "NOT_FOUND"
+      required: [success, message]
+    
+    ValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        error:
+          type: object
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+      required: [success, message]
+    
+    ConflictError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Ressource déjà existante"
+        code:
+          type: string
+          example: "CONFLICT"
+      required: [success, message]
+    
+    # -------------------------------------------------------------------------
+    # Common Objects
+    # -------------------------------------------------------------------------
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 10
+      required: [page, pageSize, total, totalPages]
+    
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+      required: [success, message]
+    
+    CreatedResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+    
+    # -------------------------------------------------------------------------
+    # User Schemas
+    # -------------------------------------------------------------------------
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID unique de l'utilisateur
+        nom:
+          type: string
+          maxLength: 100
+          description: Nom de famille
+        prenom:
+          type: string
+          maxLength: 100
+          description: Prénom
+        adresse:
+          type: string
+          maxLength: 255
+          description: Adresse complète
+        tel:
+          type: string
+          maxLength: 20
+          description: Numéro de téléphone
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Adresse email
+        role:
+          $ref: '#/components/enums/Role'
+        workerStatus:
+          $ref: '#/components/enums/WorkerStatus'
+          nullable: true
+        professionId:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la profession (pour workers)
+        avatar:
+          type: string
+          nullable: true
+          description: URL de l'avatar
+        averageRating:
+          type: number
+          format: float
+          description: Note moyenne (workers uniquement)
+          nullable: true
+        totalReviews:
+          type: integer
+          description: Nombre d'avis (workers uniquement)
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, nom, prenom, adresse, tel, email, role, createdAt, updatedAt]
+    
+    UserResponse:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            identityCardRecto:
+              type: string
+              nullable: true
+            identityCardVerso:
+              type: string
+              nullable: true
+            diploma:
+              type: string
+              nullable: true
+    
+    ClientRegisterRequest:
+      type: object
+      required:
+        - nom
+        - prenom
+        - adresse
+        - tel
+        - email
+        - password
+        - type
+      properties:
+        nom:
+          type: string
+          maxLength: 100
+          example: "Diop"
+        prenom:
+          type: string
+          maxLength: 100
+          example: "Moussa"
+        adresse:
+          type: string
+          maxLength: 255
+          example: "Bloc 12, Parcelles Assainies, Dakar"
+        tel:
+          type: string
+          maxLength: 20
+          example: "+221771234567"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: "moussa.diop@email.com"
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          example: "Password123"
+        type:
+          type: string
+          enum: [CLIENT]
+          example: "CLIENT"
+    
+    WorkerRegisterRequest:
+      type: object
+      required:
+        - nom
+        - prenom
+        - adresse
+        - tel
+        - email
+        - password
+        - type
+        - professionId
+        - identityCardRecto
+        - identityCardVerso
+      properties:
+        nom:
+          type: string
+          maxLength: 100
+          example: "Sall"
+        prenom:
+          type: string
+          maxLength: 100
+          example: "Fatou"
+        adresse:
+          type: string
+          maxLength: 255
+          example: "Point E, Dakar"
+        tel:
+          type: string
+          maxLength: 20
+          example: "+221761234567"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: "fatou.sall@email.com"
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          example: "Password123"
+        type:
+          type: string
+          enum: [WORKER]
+          example: "WORKER"
+        professionId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        identityCardRecto:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            publicId:
+              type: string
+            format:
+              type: string
+            bytes:
+              type: integer
+          description: Document d'identité recto (uploadé vers Cloudinary)
+        identityCardVerso:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            publicId:
+              type: string
+            format:
+              type: string
+            bytes:
+              type: integer
+          description: Document d'identité verso (uploadé vers Cloudinary)
+        diploma:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            publicId:
+              type: string
+            format:
+              type: string
+            bytes:
+              type: integer
+          description: Diplôme/certificat (optionnel)
+          nullable: true
+    
+    UploadedFile:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        publicId:
+          type: string
+        format:
+          type: string
+        bytes:
+          type: integer
+    
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "moussa.diop@email.com"
+        password:
+          type: string
+          example: "Password123"
+    
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Inscription effectuée avec succès."
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    
+    # -------------------------------------------------------------------------
+    # Mission Schemas
+    # -------------------------------------------------------------------------
+    CreateMissionRequest:
+      type: object
+      required:
+        - workerId
+        - serviceId
+      properties:
+        workerId:
+          type: string
+          format: uuid
+          description: ID du worker sélectionné
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        serviceId:
+          type: string
+          format: uuid
+          description: ID du service demandé
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+    
+    Mission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        prixMin:
+          type: number
+          description: Prix minimum (en CFA)
+          example: 50000
+        prixMax:
+          type: number
+          description: Prix maximum (en CFA)
+          example: 150000
+        prixFinal:
+          type: number
+          nullable: true
+          description: Prix final convenu
+        montantRestant:
+          type: number
+          nullable: true
+          description: Montant restant à payer
+        cancellationRequestedBy:
+          type: string
+          enum: [CLIENT, WORKER]
+          nullable: true
+        status:
+          $ref: '#/components/enums/MissionStatus'
+        clientConfirmed:
+          type: boolean
+        workerConfirmed:
+          type: boolean
+        reviewStatus:
+          $ref: '#/components/enums/ReviewStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    MissionWithDetails:
+      allOf:
+        - $ref: '#/components/schemas/Mission'
+        - type: object
+          properties:
+            client:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                nom:
+                  type: string
+                prenom:
+                  type: string
+            worker:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                nom:
+                  type: string
+                prenom:
+                  type: string
+            service:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+    
+    SetFinalPriceRequest:
+      type: object
+      required:
+        - prixFinal
+      properties:
+        prixFinal:
+          type: number
+          minimum: 0
+          description: Prix final convenu (en CFA)
+          example: 100000
+    
+    ProcessCancellationRequest:
+      type: object
+      required:
+        - approved
+      properties:
+        approved:
+          type: boolean
+          description: true pour approuver, false pour rejeter
+    
+    # -------------------------------------------------------------------------
+    # Payment & Escrow Schemas
+    # -------------------------------------------------------------------------
+    CreatePaymentRequest:
+      type: object
+      required:
+        - missionId
+      properties:
+        missionId:
+          type: string
+          format: uuid
+          description: ID de la mission à payer
+          example: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+    
+    CreatePaymentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            paymentId:
+              type: string
+              format: uuid
+            escrowId:
+              type: string
+              format: uuid
+            paymentUrl:
+              type: string
+              format: uri
+            amount:
+              type: number
+              example: 50000
+        message:
+          type: string
+          example: "Paiement initialisé. Veuillez compléter le paiement via PayTech."
+    
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        missionId:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          description: Montant en CFA
+          example: 50000
+        currency:
+          type: string
+          default: XOF
+          example: "XOF"
+        status:
+          $ref: '#/components/enums/PaymentStatus'
+        paymentMethod:
+          type: string
+          nullable: true
+        paytechRef:
+          type: string
+          nullable: true
+        idempotencyKey:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    Escrow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        missionId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          description: Montant total en escrow (en CFA)
+          example: 50000
+        workerAmount:
+          type: number
+          description: Montant revenant au worker (en CFA)
+          example: 45000
+        commissionAmount:
+          type: number
+          description: Montant de la commission (en CFA)
+          example: 5000
+        status:
+          $ref: '#/components/enums/EscrowStatus'
+        releaseType:
+          type: string
+          nullable: true
+        paytechRef:
+          type: string
+          nullable: true
+        releasedBy:
+          type: string
+          nullable: true
+        releaseReason:
+          type: string
+          nullable: true
+        releasedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    ReleaseEscrowRequest:
+      type: object
+      properties:
+        missionId:
+          type: string
+          format: uuid
+          description: ID de la mission
+    
+    CancelPaymentRequest:
+      type: object
+      properties:
+        missionId:
+          type: string
+          format: uuid
+        cancellationType:
+          type: string
+          enum: [DIRECT, REQUESTED]
+          default: DIRECT
+    
+    PaymentStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            missionId:
+              type: string
+              format: uuid
+            paymentId:
+              type: string
+              format: uuid
+            amount:
+              type: number
+            currency:
+              type: string
+            status:
+              $ref: '#/components/enums/PaymentStatus'
+            paytechRef:
+              type: string
+              nullable: true
+            escrow:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                amount:
+                  type: number
+                workerAmount:
+                  type: number
+                commissionAmount:
+                  type: number
+                status:
+                  $ref: '#/components/enums/EscrowStatus'
+                releasedAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    
+    PayTechWebhookPayload:
+      type: object
+      properties:
+        ref_command:
+          type: string
+          description: Référence de commande PayTech
+        token:
+          type: string
+          description: Jeton de transaction
+        amount:
+          type: string
+          description: Montant (en CFA)
+        currency:
+          type: string
+          default: "XOF"
+        status:
+          type: string
+          description: Statut du paiement
+        payment_method:
+          type: string
+          nullable: true
+        phone_number:
+          type: string
+          nullable: true
+        operator:
+          type: string
+          nullable: true
+    
+    # -------------------------------------------------------------------------
+    # Dispute Schemas
+    # -------------------------------------------------------------------------
+    CreateDisputeRequest:
+      type: object
+      required:
+        - missionId
+        - reason
+        - description
+      properties:
+        missionId:
+          type: string
+          format: uuid
+          description: ID de la mission disputée
+          example: "d4e5f6a7-b8c9-0123-defg-234567890123"
+        reason:
+          $ref: '#/components/enums/DisputeReason'
+        description:
+          type: string
+          description: Description détaillée du problème
+          example: "Le worker n'a pas terminé le travail convenu"
+    
+    Dispute:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        missionId:
+          type: string
+          format: uuid
+        reporterId:
+          type: string
+          format: uuid
+        reportedUserId:
+          type: string
+          format: uuid
+        reason:
+          $ref: '#/components/enums/DisputeReason'
+        description:
+          type: string
+        status:
+          $ref: '#/components/enums/DisputeStatus'
+        resolution:
+          $ref: '#/components/enums/DisputeResolution'
+          nullable: true
+        resolutionNote:
+          type: string
+          nullable: true
+        resolvedBy:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+    
+    DisputeEvidence:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        disputeId:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        publicId:
+          type: string
+        type:
+          type: string
+        mimeType:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        uploadedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    
+    AddEvidenceRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Fichier à uploader (image, vidéo ou document)
+        description:
+          type: string
+          description: Description de la preuve
+    
+    ResolveDisputeRequest:
+      type: object
+      required:
+        - resolution
+      properties:
+        resolution:
+          $ref: '#/components/enums/DisputeResolution'
+        resolutionNote:
+          type: string
+          description: Notes de résolution (optionnel)
+    
+    # -------------------------------------------------------------------------
+    # Review Schemas
+    # -------------------------------------------------------------------------
+    CreateReviewRequest:
+      type: object
+      required:
+        - missionId
+        - rating
+      properties:
+        missionId:
+          type: string
+          format: uuid
+          description: ID de la mission terminée
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Note de 1 à 5 étoiles
+        comment:
+          type: string
+          description: Commentaire (optionnel)
+          nullable: true
+    
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        missionId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    
+    # -------------------------------------------------------------------------
+    # Service Schemas
+    # -------------------------------------------------------------------------
+    CreateServiceRequest:
+      type: object
+      required:
+        - title
+        - description
+        - minPrice
+        - maxPrice
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          example: "Installation plomberie"
+        description:
+          type: string
+          example: "Installation complète de plomberie pour maison"
+        minPrice:
+          type: number
+          minimum: 0
+          example: 50000
+        maxPrice:
+          type: number
+          minimum: 0
+          example: 500000
+    
+    UpdateServiceRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        minPrice:
+          type: number
+          minimum: 0
+        maxPrice:
+          type: number
+          minimum: 0
+    
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        minPrice:
+          type: number
+        maxPrice:
+          type: number
+        workerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    # -------------------------------------------------------------------------
+    # Notification Schemas
+    # -------------------------------------------------------------------------
+    CreateNotificationRequest:
+      type: object
+      required:
+        - userId
+        - type
+        - title
+        - message
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: ID du destinataire
+        type:
+          $ref: '#/components/enums/NotificationType'
+        title:
+          type: string
+          maxLength: 200
+        message:
+          type: string
+        relatedId:
+          type: string
+          description: ID de l'entité associée
+          nullable: true
+        relatedType:
+          type: string
+          description: Type d'entité associée (mission, payment, etc.)
+          nullable: true
+    
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/enums/NotificationType'
+        title:
+          type: string
+        message:
+          type: string
+        status:
+          $ref: '#/components/enums/NotificationStatus'
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        relatedId:
+          type: string
+          nullable: true
+        relatedType:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    
+    UnreadCountResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            unreadCount:
+              type: integer
+    
+    # -------------------------------------------------------------------------
+    # Dashboard Schemas
+    # -------------------------------------------------------------------------
+    AdminDashboard:
+      type: object
+      properties:
+        users:
+          type: object
+          properties:
+            total:
+              type: integer
+            clients:
+              type: integer
+            workers:
+              type: integer
+            pendingWorkers:
+              type: integer
+        missions:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            completed:
+              type: integer
+            cancelled:
+              type: integer
+        payments:
+          type: object
+          properties:
+            total:
+              type: number
+            successful:
+              type: number
+            pending:
+              type: number
+        disputes:
+          type: object
+          properties:
+            total:
+              type: integer
+            open:
+              type: integer
+            resolved:
+              type: integer
+    
+    WorkerDashboard:
+      type: object
+      properties:
+        missions:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            completed:
+              type: integer
+            cancelled:
+              type: integer
+        earnings:
+          type: object
+          properties:
+            total:
+              type: number
+            pending:
+              type: number
+            released:
+              type: number
+        reputation:
+          type: object
+          properties:
+            averageRating:
+              type: number
+            totalReviews:
+              type: integer
+        disputes:
+          type: object
+          properties:
+            total:
+              type: integer
+            open:
+              type: integer
+    
+    ClientDashboard:
+      type: object
+      properties:
+        missions:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            completed:
+              type: integer
+            cancelled:
+              type: integer
+        spending:
+          type: object
+          properties:
+            total:
+              type: number
+            pending:
+              type: number
+            completed:
+              type: number
+        reliability:
+          type: object
+          properties:
+            completedMissions:
+              type: integer
+            totalSpent:
+              type: number
+    
+    # -------------------------------------------------------------------------
+    # Profession Schema
+    # -------------------------------------------------------------------------
+    Profession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+  # ============================================================================
+  # PARAMETERS
+  # ============================================================================
+  parameters:
+    page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 1
+      description: Numéro de page
+    pageSize:
+      in: query
+      name: pageSize
+      schema:
+        type: integer
+        default: 10
+        maximum: 100
+      description: Nombre d'éléments par page
+    missionId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID de la mission
+    userId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID de l'utilisateur
+    workerId:
+      in: path
+      name: workerId
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID du worker
+    serviceId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID du service
+    disputeId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID de la dispute
+    reviewId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID de l'avis
+    notificationId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: ID de la notification
+
+paths:
+  # ============================================================================
+  # AUTHENTICATION
+  # ============================================================================
+  /auth/register:
+    post:
+      summary: Inscription d'un nouvel utilisateur
+      description: |
+        Permet d'inscrire un nouveau CLIENT ou WORKER sur la plateforme.
+        - Pour CLIENT: professionId ne doit pas être présent
+        - Pour WORKER: professionId est obligatoire ainsi que les documents d'identité
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ClientRegisterRequest'
+                - $ref: '#/components/schemas/WorkerRegisterRequest'
+            examples:
+              inscription_client:
+                summary: Inscription CLIENT
+                value:
+                  nom: "Diop"
+                  prenom: "Moussa"
+                  adresse: "Bloc 12, Parcelles Assainies, Dakar"
+                  tel: "+221771234567"
+                  email: "moussa.diop@email.com"
+                  password: "Password123"
+                  type: "CLIENT"
+              inscription_worker:
+                summary: Inscription WORKER
+                value:
+                  nom: "Sall"
+                  prenom: "Fatou"
+                  adresse: "Point E, Dakar"
+                  tel: "+221761234567"
+                  email: "fatou.sall@email.com"
+                  password: "Password123"
+                  type: "WORKER"
+                  professionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      responses:
+        201:
+          description: Inscription réussie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        400:
+          description: Données de validation invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        403:
+          description: Type de compte invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+              example:
+                success: false
+                message: "L'inscription en tant qu'administrateur n'est pas autorisée."
+                code: "AUTH_ADMIN_FORBIDDEN"
+        409:
+          description: Email déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
+              example:
+                success: false
+                message: "Cette adresse email est déjà utilisée."
+                code: "AUTH_EMAIL_EXISTS"
+
+  /auth/login:
+    post:
+      summary: Connexion utilisateur
+      description: |
+        Authentifie un utilisateur et retourne un token JWT.
+        - Les workers doivent avoir un statut APPROVED pour se connecter
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: "moussa.diop@email.com"
+              password: "Password123"
+      responses:
+        200:
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        401:
+          description: Mauvais identifiants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+              example:
+                success: false
+                message: "Email ou mot de passe incorrect."
+                code: "AUTH_INVALID_CREDENTIALS"
+        403:
+          description: Compte worker en attente ou rejeté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+              examples:
+                compte_pendant:
+                  summary: Compte en attente de validation
+                  value:
+                    success: false
+                    message: "Votre compte est en attente de validation par l'administrateur."
+                    code: "AUTH_ACCOUNT_PENDING"
+                compte_rejeté:
+                  summary: Compte rejeté
+                  value:
+                    success: false
+                    message: "Votre compte a été refusé par l'administrateur."
+                    code: "AUTH_ACCOUNT_REJECTED"
+
+  /auth/me:
+    get:
+      summary: Obtenir le profil de l'utilisateur connecté
+      description: Retourne les informations de l'utilisateur authentifié
+      tags:
+        - Auth
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Profil utilisateur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  # ============================================================================
+  # MISSIONS
+  # ============================================================================
+  /missions:
+    post:
+      summary: Créer une nouvelle mission
+      description: |
+        Crée une nouvelle mission entre un client et un worker.
+        Le clientId est récupéré depuis le token JWT.
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMissionRequest'
+            example:
+              workerId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+              serviceId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+      responses:
+        201:
+          description: Mission créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedResponse'
+              example:
+                success: true
+                message: "Mission créée avec succès. En attente du paiement initial."
+                data:
+                  id: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+                  clientId: "d4e5f6a7-b8c9-0123-defg-234567890123"
+                  workerId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  serviceId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                  prixMin: 50000
+                  prixMax: 150000
+                  prixFinal: null
+                  montantRestant: null
+                  status: "PENDING_PAYMENT"
+                  createdAt: "2024-01-15T10:30:00.000Z"
+        400:
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (réservé aux clients)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+    get:
+      summary: Liste des missions
+      description: |
+        Récupère la liste des missions avec pagination.
+        Le filtrage est automatique selon le rôle:
+        - CLIENT → voit ses propres missions
+        - WORKER → voit ses propres missions
+        - ADMIN → voit toutes les missions
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - in: query
+          name: details
+          schema:
+            type: boolean
+            default: false
+          description: Inclure les détails (client, worker, service)
+        - in: query
+          name: clientId
+          schema:
+            type: string
+            format: uuid
+          description: Filtrer par client (admin uniquement)
+        - in: query
+          name: workerId
+          schema:
+            type: string
+            format: uuid
+          description: Filtrer par worker (admin uniquement)
+      responses:
+        200:
+          description: Liste des missions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Mission'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  /missions/{id}:
+    get:
+      summary: Récupérer une mission par ID
+      description: Récupère les détails d'une mission spécifique
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Mission trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionWithDetails'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (ni client ni worker de la mission)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /missions/{id}/accept:
+    post:
+      summary: Accepter la mission
+      description: Permet au worker d'accepter une mission en attente
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Mission acceptée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /missions/{id}/refuse:
+    post:
+      summary: Refuser la mission
+      description: Permet au worker de refuser une mission en attente
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Mission refusée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /missions/{id}/confirm-initial-payment:
+    post:
+      summary: Confirmer le paiement initial
+      description: Confirme le paiement initial et déverrouille les coordonnées du worker
+      tags:
+        - Missions
+        - Payments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Paiement initial confirmé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /missions/{id}/set-final-price:
+    post:
+      summary: Fixer le prix final
+      description: Fixe le prix final après négociation entre le client et le worker
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetFinalPriceRequest'
+            example:
+              prixFinal: 100000
+      responses:
+        200:
+          description: Prix final fixé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /missions/{id}/confirm-final-payment:
+    post:
+      summary: Confirmer le paiement final
+      description: Confirme le paiement final et démarre la mission
+      tags:
+        - Missions
+        - Payments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Paiement final confirmé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /missions/{id}/complete:
+    post:
+      summary: Terminer la mission
+      description: Marque la mission comme terminée (double confirmation client/worker)
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Mission terminée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /missions/{id}/request-cancellation:
+    post:
+      summary: Demander l'annulation
+      description: Demande l'annulation d'une mission en cours
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Demande d'annulation soumise
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /missions/{id}/process-cancellation:
+    post:
+      summary: Traiter l'annulation
+      description: Approuve ou rejette une demande d'annulation (admin uniquement)
+      tags:
+        - Missions
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessCancellationRequest'
+            example:
+              approved: true
+      responses:
+        200:
+          description: Annulation traitée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /missions/{id}/cancel:
+    post:
+      summary: Annuler la mission
+      description: Annule une mission (pour les statuts permettant une annulation directe)
+      tags:
+        - Missions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/missionId'
+      responses:
+        200:
+          description: Mission annulée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  # ============================================================================
+  # PAYMENTS
+  # ============================================================================
+  /payments:
+    post:
+      summary: Créer un paiement
+      description: |
+        Crée un nouveau paiement pour une mission.
+        Retourne une URL de paiement PayTech.
+      tags:
+        - Payments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+            example:
+              missionId: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+      responses:
+        201:
+          description: Paiement créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePaymentResponse'
+        400:
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /payments/callback:
+    post:
+      summary: Webhook PayTech
+      description: |
+        Endpoint de callback pour les notifications de paiement PayTech (IPN).
+        Vérifie la signature et met à jour le statut du paiement.
+      tags:
+        - Payments
+      parameters:
+        - in: header
+          name: x-paytech-signature
+          required: true
+          schema:
+            type: string
+          description: Signature HMAC-SHA256 du payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayTechWebhookPayload'
+            example:
+              ref_command: "CMD-123456"
+              token: "tok_abc123"
+              amount: "50000"
+              currency: "XOF"
+              status: "approved"
+              payment_method: "mobile_money"
+              phone_number: "+221771234567"
+              operator: "orange"
+      responses:
+        200:
+          description:Webhook traité
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        400:
+          description: Signature invalide ou données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /payments/{missionId}/release:
+    post:
+      summary: Libérer l'escrow
+      description: Libère les fonds en escrow après double confirmation de completion
+      tags:
+        - Payments
+        - Escrow
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: missionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Escrow libéré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission ou escrow introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /payments/{missionId}/cancel:
+    post:
+      summary: Annuler le paiement
+      description: Annule le paiement et traite le remboursement
+      tags:
+        - Payments
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: missionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelPaymentRequest'
+      responses:
+        200:
+          description: Paiement annulé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /payments/{missionId}:
+    get:
+      summary: Récupérer le statut du paiement
+      description: Récupère le statut du paiement et de l'escrow pour une mission
+      tags:
+        - Payments
+        - Escrow
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: missionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Statut du paiement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Paiement introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  # ============================================================================
+  # DISPUTES
+  # ============================================================================
+  /disputes:
+    post:
+      summary: Créer une dispute
+      description: Permet à un client ou worker d'ouvrir une dispute sur une mission
+      tags:
+        - Disputes
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisputeRequest'
+            example:
+              missionId: "d4e5f6a7-b8c9-0123-defg-234567890123"
+              reason: "WORK_NOT_DONE"
+              description: "Le worker n'a pas terminé le travail convenu malgré plusieurs relances."
+      responses:
+        201:
+          description: Dispute créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+    get:
+      summary: Liste des disputes
+      description: |
+        Récupère la liste des disputes avec pagination et filtres.
+        Les non-admin ne voient que leurs propres disputes.
+      tags:
+        - Disputes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/enums/DisputeStatus'
+          description: Filtrer par statut
+        - in: query
+          name: missionId
+          schema:
+            type: string
+            format: uuid
+          description: Filtrer par mission
+        - in: query
+          name: reporterId
+          schema:
+            type: string
+            format: uuid
+          description: Filtrer par reporter (admin uniquement)
+      responses:
+        200:
+          description: Liste des disputes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dispute'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  /disputes/my:
+    get:
+      summary: Mes disputes
+      description: Récupère les disputes de l'utilisateur connecté
+      tags:
+        - Disputes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        200:
+          description: Liste des disputes de l'utilisateur
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dispute'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  /disputes/{id}:
+    get:
+      summary: Détails d'une dispute
+      description: Récupère les détails d'une dispute spécifique
+      tags:
+        - Disputes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/disputeId'
+      responses:
+        200:
+          description: Détails de la dispute
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Dispute non trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /disputes/{id}/evidence:
+    post:
+      summary: Ajouter une preuve
+      description: Permet d'uploader une preuve (image, vidéo, document) pour une dispute
+      tags:
+        - Disputes
+        - Upload
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/disputeId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddEvidenceRequest'
+      responses:
+        201:
+          description: Preuve ajoutée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  /disputes/{id}/evidences/{evidenceId}:
+    delete:
+      summary: Supprimer une preuve
+      description: Permet de supprimer une preuve d'une dispute
+      tags:
+        - Disputes
+        - Upload
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/disputeId'
+        - in: path
+          name: evidenceId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID de la preuve
+      responses:
+        200:
+          description: Preuve supprimée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Preuve non trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /disputes/{id}/review:
+    patch:
+      summary: Mettre une dispute en examen
+      description: Permet à un admin de mettre une dispute sous examen
+      tags:
+        - Disputes
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/disputeId'
+      responses:
+        200:
+          description: Dispute mise en examen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /disputes/{id}/resolve:
+    patch:
+      summary: Résoudre une dispute
+      description: Permet à un admin de résoudre une dispute
+      tags:
+        - Disputes
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/disputeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDisputeRequest'
+            example:
+              resolution: "PARTIAL_REFUND"
+              resolutionNote: "Le worker sera remboursé partiellement pour le travail effectué."
+      responses:
+        200:
+          description: Dispute résolue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  # ============================================================================
+  # REVIEWS
+  # ============================================================================
+  /reviews:
+    post:
+      summary: Créer un avis
+      description: Crée un nouvel avis pour une mission terminée
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReviewRequest'
+            example:
+              missionId: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+              rating: 5
+              comment: "Excellent travail, très professionnel et ponctuel."
+      responses:
+        201:
+          description: Avis créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedResponse'
+        400:
+          description: Erreur de validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        404:
+          description: Mission introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /workers/{workerId}/reviews:
+    get:
+      summary: Liste des avis d'un worker
+      description: Récupère tous les avis d'un worker
+      tags:
+        - Reviews
+      parameters:
+        - $ref: '#/components/parameters/workerId'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        200:
+          description: Liste des avis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /reviews/{id}:
+    delete:
+      summary: Supprimer un avis
+      description: Supprime un avis (admin uniquement)
+      tags:
+        - Reviews
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/reviewId'
+      responses:
+        200:
+          description: Avis supprimé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Avis introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  # ============================================================================
+  # SERVICES
+  # ============================================================================
+  /services:
+    post:
+      summary: Créer un service
+      description: Crée un nouveau service proposé par un worker
+      tags:
+        - Services
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceRequest'
+            example:
+              title: "Installation plomberie"
+              description: "Installation complète de plomberie pour maison"
+              minPrice: 50000
+              maxPrice: 500000
+      responses:
+        201:
+          description: Service créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        400:
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (réservé aux workers)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+    get:
+      summary: Liste des services
+      description: Récupère la liste des services avec pagination
+      tags:
+        - Services
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - in: query
+          name: workerId
+          schema:
+            type: string
+            format: uuid
+          description: Filtrer par worker
+      responses:
+        200:
+          description: Liste des services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Service'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /services/{id}:
+    get:
+      summary: Obtenir un service par ID
+      description: Récupère les détails d'un service par son ID
+      tags:
+        - Services
+      parameters:
+        - $ref: '#/components/parameters/serviceId'
+      responses:
+        200:
+          description: Service trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        404:
+          description: Service introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+    put:
+      summary: Modifier un service
+      description: Met à jour les informations d'un service (propriétaire ou admin uniquement)
+      tags:
+        - Services
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/serviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateServiceRequest'
+      responses:
+        200:
+          description: Service mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        400:
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Service introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+    delete:
+      summary: Supprimer un service
+      description: Supprime un service (propriétaire ou admin uniquement)
+      tags:
+        - Services
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/serviceId'
+      responses:
+        200:
+          description: Service supprimé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Service introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  # ============================================================================
+  # DASHBOARD
+  # ============================================================================
+  /dashboard/admin:
+    get:
+      summary: Statistiques du dashboard admin
+      description: |
+        Récupère les statistiques complètes du dashboard pour l'administrateur.
+        Inclut les statistiques utilisateurs, missions, paiements et litiges.
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, 1y]
+          description: Période prédéfinie
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+          description: Date de début (YYYY-MM-DD)
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+          description: Date de fin (YYYY-MM-DD)
+      responses:
+        200:
+          description: Statistiques du dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/AdminDashboard'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (pas admin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /dashboard/worker:
+    get:
+      summary: Statistiques du dashboard worker
+      description: |
+        Récupère les statistiques du dashboard pour le worker connecté.
+        Inclut les missions, revenus, réputation et litiges.
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Statistiques du dashboard worker
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/WorkerDashboard'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (pas worker)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /dashboard/client:
+    get:
+      summary: Statistiques du dashboard client
+      description: |
+        Récupère les statistiques du dashboard pour le client connecté.
+        Inclut les missions, dépenses, fiabilité et avis.
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Statistiques du dashboard client
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ClientDashboard'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (pas client)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  # ============================================================================
+  # ADMIN
+  # ============================================================================
+  /admin/workers:
+    get:
+      summary: Liste des travailleurs
+      description: |
+        Récupère la liste des travailleurs avec un filtre optionnel par statut.
+        Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/enums/WorkerStatus'
+          description: Statut du travailleur (optionnel)
+      responses:
+        200:
+          description: Liste des travailleurs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      workers:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UserResponse'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /admin/workers/{id}/approve:
+    patch:
+      summary: Approuver un travailleur
+      description: |
+        Approuve un travailleur en attente de validation.
+        Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Travailleur approuvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Le travailleur n'est pas en attente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Travailleur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/workers/{id}/reject:
+    patch:
+      summary: Rejeter un travailleur
+      description: |
+        Rejette un travailleur en attente de validation.
+        La raison du rejet est obligatoire.
+        Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rejectionReason
+              properties:
+                rejectionReason:
+                  type: string
+                  description: Raison du rejet
+                  example: "Profil incomplet. Veuillez fournir plus de détails sur vos compétences."
+      responses:
+        200:
+          description: Travailleur rejeté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: Raisons possibles - Le travailleur n'est pas en attente, ou raison du rejet manquante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Travailleur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/users/{id}/activate:
+    patch:
+      summary: Activer un utilisateur
+      description: Active un utilisateur désactivé. Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Utilisateur activé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: L'utilisateur est déjà actif
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/users/{id}/deactivate:
+    patch:
+      summary: Désactiver un utilisateur
+      description: Désactive un utilisateur actif. Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Utilisateur désactivé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: L'utilisateur est déjà désactivé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/users/{id}/ban:
+    patch:
+      summary: Bannir un utilisateur
+      description: Banni un utilisateur. Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Utilisateur banni
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: L'utilisateur est déjà banni
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/users/{id}/unban:
+    patch:
+      summary: Débannir un utilisateur
+      description: Débanni un utilisateur banni. Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Utilisateur débanni
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: L'utilisateur n'est pas banni
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/users/{id}:
+    delete:
+      summary: Soft delete un utilisateur
+      description: Soft delete un utilisateur (deletion logique). Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Utilisateur soft deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: L'utilisateur est déjà soft deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /admin/users/{id}/restore:
+    patch:
+      summary: Restaurer un utilisateur soft deleted
+      description: Restaure un utilisateur soft deleted. Réservé aux administrateurs.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        200:
+          description: Utilisateur restauré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        400:
+          description: L'utilisateur n'est pas soft deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  # ============================================================================
+  # NOTIFICATIONS
+  # ============================================================================
+  /notifications:
+    get:
+      summary: Liste des notifications de l'utilisateur
+      description: |
+        Récupère les notifications de l'utilisateur connecté avec pagination et filtres.
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/enums/NotificationStatus'
+          description: Filtrer par statut de lecture
+        - in: query
+          name: type
+          schema:
+            $ref: '#/components/enums/NotificationType'
+          description: Filtrer par type de notification
+      responses:
+        200:
+          description: Liste des notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      notifications:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Notification'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+    post:
+      summary: Créer une notification
+      description: Crée une nouvelle notification. Réservé aux administrateurs.
+      tags:
+        - Notifications
+        - Admin
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNotificationRequest'
+      responses:
+        201:
+          description: Notification créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+
+  /notifications/unread-count:
+    get:
+      summary: Nombre de notifications non lues
+      description: Retourne le nombre de notifications non lues pour l'utilisateur connecté
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Nombre de notifications non lues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  /notifications/{id}/read:
+    patch:
+      summary: Marquer une notification comme lue
+      description: Marque une notification comme lue
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/notificationId'
+      responses:
+        200:
+          description: Notification marquée comme lue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Notification introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+
+  /notifications/read-all:
+    patch:
+      summary: Marquer toutes les notifications comme lues
+      description: Marque toutes les notifications de l'utilisateur comme lues
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Toutes les notifications marquées comme lues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+  /notifications/{id}:
+    delete:
+      summary: Supprimer une notification
+      description: Supprime une notification. Réservé aux administrateurs.
+      tags:
+        - Notifications
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/notificationId'
+      responses:
+        200:
+          description: Notification supprimée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        401:
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        403:
+          description: Accès refusé (admin uniquement)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        404:
+          description: Notification introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'

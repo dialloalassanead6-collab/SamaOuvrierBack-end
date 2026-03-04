@@ -166,6 +166,11 @@ export class RegisterUseCase {
       role: Role.WORKER,
       workerStatus: WorkerStatus.PENDING,
       professionId: input.professionId,
+      
+      // ✅ Document URLs from Cloudinary
+      identityCardRecto: input.identityCardRecto.url,
+      identityCardVerso: input.identityCardVerso.url,
+      diploma: input.diploma?.url ?? null,
     };
 
     // 6. Sauvegarder en base de données

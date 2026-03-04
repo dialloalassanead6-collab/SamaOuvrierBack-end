@@ -6,6 +6,7 @@
 import { Role, WorkerStatus } from '@prisma/client';
 import { BusinessError } from '../../../shared/errors/index.js';
 import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../shared/constants/messages.js';
+import { NotificationService } from '../../notification/index.js';
 /**
  * Use case pour rejeter un travailleur
  *
@@ -16,11 +17,14 @@ import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../s
  * - Vérifier que la raison du rejet est fournie
  * - Rejeter le travailleur (workerStatus = REJECTED)
  * - Enregistrer la raison du rejet
+ * -Notifier le worker du rejet
  */
 export class RejectWorkerUseCase {
     userRepository;
-    constructor(userRepository) {
+    notificationService;
+    constructor(userRepository, notificationService) {
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
     /**
      * Exécuter le use case
@@ -79,6 +83,17 @@ export class RejectWorkerUseCase {
         }
         // Rejeter le travailleur avec la raison
         const updatedWorker = await this.userRepository.updateWorkerStatus(workerId, WorkerStatus.REJECTED, rejectionReason.trim());
+        // Notifier le worker du rejet de son compte
+        try {
+            await this.notificationService.notifyAccountRejected({
+                userId: workerId,
+                rejectionReason: rejectionReason.trim(),
+            });
+        }
+        catch (notificationError) {
+            // Log l'erreur mais ne pas blocker le rejet
+            console.error('Erreur lors de l\'envoi de la notification:', notificationError);
+        }
         return {
             user: updatedWorker,
             message: WORKER_VALIDATION_MESSAGES.WORKER_REJECTED,

@@ -1,0 +1,26 @@
+// ============================================================================
+// INTERFACE LAYER - MISSION MODULE EXPORT
+// ============================================================================
+
+export { missionController } from './mission.controller.js';
+export { default as missionRoutes } from './mission.routes.js';
+
+// Validation schemas
+export {
+  createMissionSchema,
+  setFinalPriceSchema,
+  requestCancellationSchema,
+  processCancellationSchema,
+  paginationQuerySchema,
+  missionResponseSchema,
+  missionWithDetailsSchema,
+  missionListResponseSchema,
+  type CreateMissionValidation,
+  type SetFinalPriceValidation,
+  type RequestCancellationValidation,
+  type ProcessCancellationValidation,
+  type PaginationQueryValidation,
+  type MissionResponseValidation,
+  type MissionWithDetailsValidation,
+  type MissionListResponseValidation,
+} from './mission.validation.js';

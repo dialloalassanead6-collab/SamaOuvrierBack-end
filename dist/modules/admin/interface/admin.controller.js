@@ -6,6 +6,7 @@
 import { WorkerStatus } from '@prisma/client';
 import { ListWorkersUseCase, ApproveWorkerUseCase, RejectWorkerUseCase, ActivateUserUseCase, DeactivateUserUseCase, BanUserUseCase, UnbanUserUseCase, SoftDeleteUserUseCase, RestoreUserUseCase, } from '../application/index.js';
 import { userRepository } from '../../user/infrastructure/index.js';
+import { notificationService } from '../../notification/index.js';
 import { sendSuccess, sendError } from '../../../shared/utils/index.js';
 import { getPaginationMetadata } from '../../../shared/middleware/pagination.middleware.js';
 /**
@@ -34,8 +35,8 @@ export class AdminController {
     constructor() {
         // Injection de dépendances - les use cases dépendent des interfaces, pas des implémentations
         this.listWorkersUseCase = new ListWorkersUseCase(userRepository);
-        this.approveWorkerUseCase = new ApproveWorkerUseCase(userRepository);
-        this.rejectWorkerUseCase = new RejectWorkerUseCase(userRepository);
+        this.approveWorkerUseCase = new ApproveWorkerUseCase(userRepository, notificationService);
+        this.rejectWorkerUseCase = new RejectWorkerUseCase(userRepository, notificationService);
         this.activateUserUseCase = new ActivateUserUseCase(userRepository);
         this.deactivateUserUseCase = new DeactivateUserUseCase(userRepository);
         this.banUserUseCase = new BanUserUseCase(userRepository);

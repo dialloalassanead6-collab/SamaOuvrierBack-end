@@ -13,6 +13,29 @@ export class UpdateServiceUseCase {
         this.serviceRepository = serviceRepository;
     }
     /**
+     * Validate service price range for update
+     * Uses existing values if new values are not provided
+     *
+     * @param currentMinPrice - Current minimum price from existing service
+     * @param currentMaxPrice - Current maximum price from existing service
+     * @param inputMinPrice - New minimum price from input (optional)
+     * @param inputMaxPrice - New maximum price from input (optional)
+     * @throws BusinessErrors.badRequest if validation fails
+     */
+    validatePriceRangeUpdate(currentMinPrice, currentMaxPrice, inputMinPrice, inputMaxPrice) {
+        // Use new values if provided, otherwise keep current values
+        const newMinPrice = inputMinPrice !== undefined ? inputMinPrice : currentMinPrice;
+        const newMaxPrice = inputMaxPrice !== undefined ? inputMaxPrice : currentMaxPrice;
+        // Prix minimum doit être >= 2000 (comme Mission)
+        if (newMinPrice < 2000) {
+            throw BusinessErrors.badRequest('Le prix minimum doit être supérieur ou égal à 2000');
+        }
+        // Prix maximum doit être >= prix minimum
+        if (newMaxPrice < newMinPrice) {
+            throw BusinessErrors.badRequest(`Le prix maximum (${newMaxPrice}) doit être supérieur ou égal au prix minimum (${newMinPrice})`);
+        }
+    }
+    /**
      * Execute the use case
      *
      * @param id - Service ID to update
@@ -34,6 +57,10 @@ export class UpdateServiceUseCase {
         // If CLIENT tries to update, deny access (shouldn't reach here due to route protection)
         if (userRole === 'CLIENT') {
             throw BusinessErrors.forbidden('Les clients ne peuvent pas modifier les services');
+        }
+        // Validate price range if minPrice or maxPrice is being updated
+        if (input.minPrice !== undefined || input.maxPrice !== undefined) {
+            this.validatePriceRangeUpdate(service.minPrice, service.maxPrice, input.minPrice, input.maxPrice);
         }
         const updatedService = await this.serviceRepository.update(id, input);
         return updatedService.toResponse();

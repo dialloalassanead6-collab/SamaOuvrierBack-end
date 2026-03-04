@@ -1,8 +1,16 @@
+// ============================================================================
 // Interface Layer - Auth Routes
+// ============================================================================
 // Express router for authentication endpoints
+//
+// Worker registration now supports file uploads:
+// - REQUIRED: identityCardRecto, identityCardVerso
+// - OPTIONAL: diploma
+// ============================================================================
 import { Router } from 'express';
 import { AuthController } from './auth.controller.js';
 import { createAuthRateLimiter } from '../../../shared/middleware/rate-limit.middleware.js';
+import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.middleware.js';
 /**
  * @swagger
  * /auth/register:
@@ -195,7 +203,8 @@ export const createAuthRoutes = (authService) => {
     const authController = new AuthController(authService);
     // Public routes (no authentication required)
     // Rate limiting appliqué pour protéger contre les attaques par force brute
-    router.post('/register', createAuthRateLimiter(), authController.register.bind(authController));
+    // Worker registration: multipart/form-data with file uploads
+    router.post('/register', createAuthRateLimiter(), createWorkerUploadMiddleware(), authController.register.bind(authController));
     router.post('/login', createAuthRateLimiter(), authController.login.bind(authController));
     return router;
 };

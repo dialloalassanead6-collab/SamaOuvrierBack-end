@@ -107,6 +107,11 @@ export class PrismaAuthRepository implements IAuthRepository {
         role: data.role,
         workerStatus: data.workerStatus ?? null,
         professionId: data.professionId ?? null,
+        
+        // ✅ Worker document URLs
+        identityCardRecto: data.identityCardRecto ?? null,
+        identityCardVerso: data.identityCardVerso ?? null,
+        diploma: data.diploma ?? null,
       },
     });
 

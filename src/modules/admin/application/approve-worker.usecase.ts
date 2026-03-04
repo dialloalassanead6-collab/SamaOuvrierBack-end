@@ -9,6 +9,7 @@ import type { IUserRepository } from '../../user/application/index.js';
 import type { User } from '../../user/domain/index.js';
 import { BusinessError } from '../../../shared/errors/index.js';
 import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../shared/constants/messages.js';
+import { NotificationService } from '../../notification/index.js';
 
 /**
  * Paramètres d'entrée pour le use case ApproveWorker
@@ -37,9 +38,13 @@ export interface ApproveWorkerOutput {
  * - Vérifier que le travailleur est en attente (workerStatus = PENDING)
  * - Approuver le travailleur (workerStatus = APPROVED)
  * - Réinitialiser rejectionReason à null
+ * -Notifier le worker de la validation
  */
 export class ApproveWorkerUseCase {
-  constructor(private readonly userRepository: IUserRepository) {}
+  constructor(
+    private readonly userRepository: IUserRepository,
+    private readonly notificationService: NotificationService
+  ) {}
 
   /**
    * Exécuter le use case
@@ -92,6 +97,16 @@ export class ApproveWorkerUseCase {
       WorkerStatus.APPROVED,
       null
     );
+
+    // Notifier le worker de la validation de son compte
+    try {
+      await this.notificationService.notifyAccountValidated({
+        userId: workerId,
+      });
+    } catch (notificationError) {
+      // Log l'erreur mais ne pas bloquer l'approbation
+      console.error('Erreur lors de l\'envoi de la notification:', notificationError);
+    }
 
     return {
       user: updatedWorker,

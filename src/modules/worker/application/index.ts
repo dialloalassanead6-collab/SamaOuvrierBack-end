@@ -17,3 +17,13 @@ export type { ListPublicWorkersInput, ListPublicWorkersOutput } from './list-pub
 // Worker services use cases
 export { ListWorkerServicesUseCase, WorkerNotFoundError, WorkerNotApprovedError } from './list-worker-services.usecase.js';
 export type { ListWorkerServicesInput, ListWorkerServicesOutput } from './list-worker-services.usecase.js';
+
+// Worker personal use cases (authenticated)
+export { GetMyProfileUseCase } from './get-my-profile.usecase.js';
+export type { GetMyProfileInput, GetMyProfileOutput } from './get-my-profile.usecase.js';
+
+export { GetMyMissionsUseCase } from './get-my-missions.usecase.js';
+export type { GetMyMissionsInput, GetMyMissionsOutput } from './get-my-missions.usecase.js';
+
+export { GetMyServicesUseCase } from './get-my-services.usecase.js';
+export type { GetMyServicesInput, GetMyServicesOutput } from './get-my-services.usecase.js';

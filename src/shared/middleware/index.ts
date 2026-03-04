@@ -14,3 +14,8 @@ export type { PaginationParams, PaginationOptions } from './pagination.middlewar
 
 export { createRateLimitMiddleware, createAuthRateLimiter } from './rate-limit.middleware.js';
 export type { RateLimitOptions } from './rate-limit.middleware.js';
+
+export { verifyMissionOwnership } from './verify-mission-ownership.middleware.js';
+export type { MissionOwnershipOptions } from './verify-mission-ownership.middleware.js';
+
+export { validateRequest } from './validate-request.middleware.js';

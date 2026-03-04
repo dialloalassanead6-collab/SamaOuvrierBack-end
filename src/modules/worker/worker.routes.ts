@@ -144,6 +144,115 @@ router.get(
 
 /**
  * @swagger
+ * /workers/me:
+ *   get:
+ *     summary: Mon profil worker
+ *     description: >
+ *       Retourne le profil du worker connecté.
+ *       Le worker doit être authentifié.
+ *     tags:
+ *       - Worker - Gestion du compte
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profil du worker
+ *       401:
+ *         description: Non authentifié
+ *       403:
+ *         description: Accès refusé (worker uniquement)
+ */
+router.get(
+  '/me',
+  authenticate(),
+  authorize(Role.WORKER),
+  asyncHandler(workerController.getMyProfile.bind(workerController))
+);
+
+/**
+ * @swagger
+ * /workers/me/missions:
+ *   get:
+ *     summary: Mes missions
+ *     description: >
+ *       Retourne la liste des missions du worker connecté.
+ *       Le worker doit être approuvé (APPROVED).
+ *     tags:
+ *       - Worker - Gestion du compte
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Numéro de page
+ *       - in: query
+ *         name: pageSize
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Nombre d'éléments par page
+ *     responses:
+ *       200:
+ *         description: Liste des missions
+ *       401:
+ *         description: Non authentifié
+ *       403:
+ *         description: Accès refusé (worker uniquement)
+ */
+router.get(
+  '/me/missions',
+  authenticate(),
+  authorize(Role.WORKER),
+  pagination(),
+  asyncHandler(workerController.getMyMissions.bind(workerController))
+);
+
+/**
+ * @swagger
+ * /workers/me/services:
+ *   get:
+ *     summary: Mes services
+ *     description: >
+ *       Retourne la liste des services du worker connecté.
+ *       Le worker doit être approuvé (APPROVED).
+ *     tags:
+ *       - Worker - Gestion du compte
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Numéro de page
+ *       - in: query
+ *         name: pageSize
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Nombre d'éléments par page
+ *     responses:
+ *       200:
+ *         description: Liste des services
+ *       401:
+ *         description: Non authentifié
+ *       403:
+ *         description: Accès refusé (worker uniquement)
+ */
+router.get(
+  '/me/services',
+  authenticate(),
+  authorize(Role.WORKER),
+  pagination(),
+  asyncHandler(workerController.getMyServices.bind(workerController))
+);
+
+/**
+ * @swagger
  * /workers/me/reapply:
  *   patch:
  *     summary: Refaire une demande de validation

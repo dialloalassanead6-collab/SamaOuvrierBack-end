@@ -2,6 +2,7 @@
 // Handles HTTP requests and responses
 import { AddServiceUseCase, GetServicesUseCase, GetServiceByIdUseCase, UpdateServiceUseCase, DeleteServiceUseCase, } from '../application/index.js';
 import { serviceRepository } from '../infrastructure/index.js';
+import { userRepository } from '../../user/infrastructure/index.js';
 import { getPaginationMetadata } from '../../../shared/middleware/pagination.middleware.js';
 /**
  * Service Controller
@@ -13,7 +14,7 @@ export class ServiceController {
     updateServiceUseCase;
     deleteServiceUseCase;
     constructor() {
-        this.addServiceUseCase = new AddServiceUseCase(serviceRepository);
+        this.addServiceUseCase = new AddServiceUseCase(serviceRepository, userRepository);
         this.getServicesUseCase = new GetServicesUseCase(serviceRepository);
         this.getServiceByIdUseCase = new GetServiceByIdUseCase(serviceRepository);
         this.updateServiceUseCase = new UpdateServiceUseCase(serviceRepository);

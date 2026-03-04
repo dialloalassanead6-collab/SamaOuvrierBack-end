@@ -6,6 +6,7 @@
 import { Role, WorkerStatus } from '@prisma/client';
 import { BusinessError } from '../../../shared/errors/index.js';
 import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../shared/constants/messages.js';
+import { NotificationService } from '../../notification/index.js';
 /**
  * Use case pour approuver un travailleur
  *
@@ -15,11 +16,14 @@ import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../s
  * - Vérifier que le travailleur est en attente (workerStatus = PENDING)
  * - Approuver le travailleur (workerStatus = APPROVED)
  * - Réinitialiser rejectionReason à null
+ * -Notifier le worker de la validation
  */
 export class ApproveWorkerUseCase {
     userRepository;
-    constructor(userRepository) {
+    notificationService;
+    constructor(userRepository, notificationService) {
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
     /**
      * Exécuter le use case
@@ -62,6 +66,16 @@ export class ApproveWorkerUseCase {
         }
         // Approuver le travailleur
         const updatedWorker = await this.userRepository.updateWorkerStatus(workerId, WorkerStatus.APPROVED, null);
+        // Notifier le worker de la validation de son compte
+        try {
+            await this.notificationService.notifyAccountValidated({
+                userId: workerId,
+            });
+        }
+        catch (notificationError) {
+            // Log l'erreur mais ne pas bloquer l'approbation
+            console.error('Erreur lors de l\'envoi de la notification:', notificationError);
+        }
         return {
             user: updatedWorker,
             message: WORKER_VALIDATION_MESSAGES.WORKER_APPROVED,

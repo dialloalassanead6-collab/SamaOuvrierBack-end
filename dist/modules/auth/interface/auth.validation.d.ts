@@ -1,8 +1,20 @@
 import { z } from 'zod';
 /**
+ * Schema for uploaded file metadata (from Cloudinary)
+ * This is used after file upload to validate the returned data
+ */
+export declare const uploadedFileSchema: z.ZodObject<{
+    url: z.ZodString;
+    publicId: z.ZodString;
+    format: z.ZodString;
+    bytes: z.ZodNumber;
+}, z.core.$strip>;
+export type UploadedFile = z.infer<typeof uploadedFileSchema>;
+/**
  * Client registration schema
  * - type = "CLIENT"
  * - professionId is FORBIDDEN (must not be present)
+ * - No document uploads required
  */
 export declare const clientRegisterSchema: z.ZodObject<{
     nom: z.ZodString;
@@ -19,6 +31,9 @@ export type ClientRegisterRequest = z.infer<typeof clientRegisterSchema>;
  * Worker registration schema
  * - type = "WORKER"
  * - professionId is REQUIRED
+ * - identityCardRecto: REQUIRED (uploaded file URL)
+ * - identityCardVerso: REQUIRED (uploaded file URL)
+ * - diploma: OPTIONAL (uploaded file URL)
  */
 export declare const workerRegisterSchema: z.ZodObject<{
     nom: z.ZodString;
@@ -29,7 +44,25 @@ export declare const workerRegisterSchema: z.ZodObject<{
     password: z.ZodString;
     type: z.ZodLiteral<"WORKER">;
     professionId: z.ZodString;
-}, z.core.$strip>;
+    identityCardRecto: z.ZodObject<{
+        url: z.ZodString;
+        publicId: z.ZodString;
+        format: z.ZodString;
+        bytes: z.ZodNumber;
+    }, z.core.$strip>;
+    identityCardVerso: z.ZodObject<{
+        url: z.ZodString;
+        publicId: z.ZodString;
+        format: z.ZodString;
+        bytes: z.ZodNumber;
+    }, z.core.$strip>;
+    diploma: z.ZodOptional<z.ZodObject<{
+        url: z.ZodString;
+        publicId: z.ZodString;
+        format: z.ZodString;
+        bytes: z.ZodNumber;
+    }, z.core.$strip>>;
+}, z.core.$strict>;
 export type WorkerRegisterRequest = z.infer<typeof workerRegisterSchema>;
 /**
  * Union schema for registration (tries client first, then worker)
@@ -52,7 +85,25 @@ export declare const registerSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     password: z.ZodString;
     type: z.ZodLiteral<"WORKER">;
     professionId: z.ZodString;
-}, z.core.$strip>], "type">;
+    identityCardRecto: z.ZodObject<{
+        url: z.ZodString;
+        publicId: z.ZodString;
+        format: z.ZodString;
+        bytes: z.ZodNumber;
+    }, z.core.$strip>;
+    identityCardVerso: z.ZodObject<{
+        url: z.ZodString;
+        publicId: z.ZodString;
+        format: z.ZodString;
+        bytes: z.ZodNumber;
+    }, z.core.$strip>;
+    diploma: z.ZodOptional<z.ZodObject<{
+        url: z.ZodString;
+        publicId: z.ZodString;
+        format: z.ZodString;
+        bytes: z.ZodNumber;
+    }, z.core.$strip>>;
+}, z.core.$strict>], "type">;
 export type RegisterRequest = z.infer<typeof registerSchema>;
 /**
  * Login Request DTO

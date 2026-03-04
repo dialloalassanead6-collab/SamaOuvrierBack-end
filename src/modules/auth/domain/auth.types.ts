@@ -1,7 +1,25 @@
+// ============================================================================
 // Domain Layer - Auth Types
+// ============================================================================
 // Core authentication types and interfaces
+//
+// Worker registration now includes:
+// - REQUIRED: identity card (recto and verso)
+// - OPTIONAL: diploma/certificate
+// ============================================================================
 
 import type { Role, WorkerStatus } from '@prisma/client';
+
+/**
+ * Uploaded file metadata (from Cloudinary)
+ * Used in worker registration for identity card and diploma
+ */
+export interface WorkerDocumentMetadata {
+  url: string;
+  publicId: string;
+  format: string;
+  bytes: number;
+}
 
 /**
  * Registration type sent by client
@@ -95,6 +113,9 @@ export interface ClientRegisterInput {
 
 /**
  * Input data for worker registration
+ * 
+ * ✅ REQUIRED: identityCardRecto, identityCardVerso
+ * ✅ OPTIONAL: diploma
  */
 export interface WorkerRegisterInput {
   type: 'WORKER';
@@ -105,6 +126,13 @@ export interface WorkerRegisterInput {
   email: string;
   password: string;
   professionId: string;
+  
+  // ✅ REQUIRED: Identity card
+  identityCardRecto: WorkerDocumentMetadata;
+  identityCardVerso: WorkerDocumentMetadata;
+  
+  // ✅ OPTIONAL: Diploma/Certificate
+  diploma?: WorkerDocumentMetadata;
 }
 
 /**

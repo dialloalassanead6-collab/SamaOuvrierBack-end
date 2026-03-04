@@ -9,6 +9,7 @@ import type { IUserRepository } from '../../user/application/index.js';
 import type { User } from '../../user/domain/index.js';
 import { BusinessError } from '../../../shared/errors/index.js';
 import { WORKER_VALIDATION_MESSAGES, HTTP_STATUS, ERROR_CODES } from '../../../shared/constants/messages.js';
+import { NotificationService } from '../../notification/index.js';
 
 /**
  * Paramètres d'entrée pour le use case RejectWorker
@@ -40,9 +41,13 @@ export interface RejectWorkerOutput {
  * - Vérifier que la raison du rejet est fournie
  * - Rejeter le travailleur (workerStatus = REJECTED)
  * - Enregistrer la raison du rejet
+ * -Notifier le worker du rejet
  */
 export class RejectWorkerUseCase {
-  constructor(private readonly userRepository: IUserRepository) {}
+  constructor(
+    private readonly userRepository: IUserRepository,
+    private readonly notificationService: NotificationService
+  ) {}
 
   /**
    * Exécuter le use case
@@ -113,6 +118,17 @@ export class RejectWorkerUseCase {
       WorkerStatus.REJECTED,
       rejectionReason.trim()
     );
+
+    // Notifier le worker du rejet de son compte
+    try {
+      await this.notificationService.notifyAccountRejected({
+        userId: workerId,
+        rejectionReason: rejectionReason.trim(),
+      });
+    } catch (notificationError) {
+      // Log l'erreur mais ne pas blocker le rejet
+      console.error('Erreur lors de l\'envoi de la notification:', notificationError);
+    }
 
     return {
       user: updatedWorker,

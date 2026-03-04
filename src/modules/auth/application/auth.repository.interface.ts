@@ -1,12 +1,24 @@
+// ============================================================================
 // Application Layer - Auth Repository Interface
+// ============================================================================
 // Contract for authentication data operations
 // Follows Dependency Inversion Principle (DIP)
+//
+// Worker registration now includes document fields:
+// - identityCardRecto, identityCardVerso (REQUIRED)
+// - diploma (OPTIONAL)
+// ============================================================================
 
 import type { Role, WorkerStatus } from '@prisma/client';
 import type { RegisteredUser, UserWithPassword, ProfessionEntity } from '../domain/index.js';
 
 /**
  * Data required to create a new user
+ * 
+ * For workers:
+ * - identityCardRecto: URL from Cloudinary (REQUIRED)
+ * - identityCardVerso: URL from Cloudinary (REQUIRED)
+ * - diploma: URL from Cloudinary (OPTIONAL)
  */
 export interface CreateUserData {
   nom: string;
@@ -18,6 +30,11 @@ export interface CreateUserData {
   role: Role;
   workerStatus?: WorkerStatus;
   professionId?: string;
+  
+  // Worker document URLs
+  identityCardRecto?: string;
+  identityCardVerso?: string;
+  diploma?: string | null;
 }
 
 /**

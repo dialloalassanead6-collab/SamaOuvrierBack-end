@@ -2,6 +2,11 @@ import type { Role, WorkerStatus } from '@prisma/client';
 import type { RegisteredUser, UserWithPassword, ProfessionEntity } from '../domain/index.js';
 /**
  * Data required to create a new user
+ *
+ * For workers:
+ * - identityCardRecto: URL from Cloudinary (REQUIRED)
+ * - identityCardVerso: URL from Cloudinary (REQUIRED)
+ * - diploma: URL from Cloudinary (OPTIONAL)
  */
 export interface CreateUserData {
     nom: string;
@@ -13,6 +18,9 @@ export interface CreateUserData {
     role: Role;
     workerStatus?: WorkerStatus;
     professionId?: string;
+    identityCardRecto?: string;
+    identityCardVerso?: string;
+    diploma?: string | null;
 }
 /**
  * Auth Repository Interface

@@ -57,11 +57,11 @@ export class Service {
      * Validate price range invariant
      */
     validatePriceRange(minPrice, maxPrice) {
-        if (minPrice < 0) {
-            throw new Error('Minimum price must be >= 0');
+        if (minPrice < 2000) {
+            throw new Error('Le prix minimum doit être >= 2000');
         }
         if (maxPrice < minPrice) {
-            throw new Error('Maximum price must be >= minimum price');
+            throw new Error('Le prix maximum doit être >= prix minimum');
         }
     }
     /**

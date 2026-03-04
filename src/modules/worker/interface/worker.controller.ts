@@ -10,9 +10,14 @@ import {
   ListPublicWorkersUseCase,
   ListWorkerServicesUseCase,
   WorkerNotApprovedError,
+  GetMyProfileUseCase,
+  GetMyMissionsUseCase,
+  GetMyServicesUseCase,
 } from '../application/index.js';
 import { workerRepository } from '../infrastructure/index.js';
 import { userRepository } from '../../user/infrastructure/index.js';
+import { serviceRepository } from '../../service/infrastructure/index.js';
+import { missionRepository } from '../../mission/infrastructure/index.js';
 import { sendSuccess, sendNotFound, sendError } from '../../../shared/utils/index.js';
 import { getPaginationMetadata } from '../../../shared/middleware/index.js';
 
@@ -28,16 +33,28 @@ import { getPaginationMetadata } from '../../../shared/middleware/index.js';
  * ROUTES PUBLIQUES:
  * - GET /workers/public - Liste des workers publics
  * - GET /workers/:workerId/services - Services d'un worker
+ * 
+ * ROUTES PROTÉGÉES (worker connecté):
+ * - GET /workers/me - Mon profil
+ * - GET /workers/me/missions - Mes missions
+ * - GET /workers/me/services - Mes services
+ * - PATCH /workers/me/reapply - Refaire une demande
  */
 export class WorkerController {
   private reapplyWorkerUseCase: ReapplyWorkerUseCase;
   private listPublicWorkersUseCase: ListPublicWorkersUseCase;
   private listWorkerServicesUseCase: ListWorkerServicesUseCase;
+  private getMyProfileUseCase: GetMyProfileUseCase;
+  private getMyMissionsUseCase: GetMyMissionsUseCase;
+  private getMyServicesUseCase: GetMyServicesUseCase;
 
   constructor() {
     this.reapplyWorkerUseCase = new ReapplyWorkerUseCase(userRepository);
     this.listPublicWorkersUseCase = new ListPublicWorkersUseCase(workerRepository);
     this.listWorkerServicesUseCase = new ListWorkerServicesUseCase(workerRepository);
+    this.getMyProfileUseCase = new GetMyProfileUseCase(userRepository);
+    this.getMyMissionsUseCase = new GetMyMissionsUseCase(userRepository, missionRepository);
+    this.getMyServicesUseCase = new GetMyServicesUseCase(userRepository, serviceRepository);
   }
 
   /**
@@ -160,6 +177,107 @@ export class WorkerController {
       // Formater la réponse
       return sendSuccess(res, result.message, {
         worker: result.user.toResponse(),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * Obtenir mon profil
+   * GET /api/workers/me
+   */
+  async getMyProfile(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
+    try {
+      const workerId = req.user?.sub;
+
+      if (!workerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Non authentifié.',
+        });
+      }
+
+      const result = await this.getMyProfileUseCase.execute({ workerId });
+
+      return sendSuccess(res, 'Profil récupéré avec succès.', {
+        worker: result.user.toResponse(),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * Obtenir mes missions
+   * GET /api/workers/me/missions
+   */
+  async getMyMissions(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
+    try {
+      const workerId = req.user?.sub;
+
+      if (!workerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Non authentifié.',
+        });
+      }
+
+      const pagination = req.pagination;
+
+      const result = await this.getMyMissionsUseCase.execute({
+        workerId,
+        skip: pagination?.skip ?? 0,
+        take: pagination?.take ?? 10,
+      });
+
+      const paginationMeta = getPaginationMetadata(
+        pagination?.page ?? 1,
+        pagination?.pageSize ?? 10,
+        result.total
+      );
+
+      return sendSuccess(res, 'Missions récupérées avec succès.', {
+        missions: result.missions,
+        pagination: paginationMeta,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * Obtenir mes services
+   * GET /api/workers/me/services
+   */
+  async getMyServices(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
+    try {
+      const workerId = req.user?.sub;
+
+      if (!workerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Non authentifié.',
+        });
+      }
+
+      const pagination = req.pagination;
+
+      const result = await this.getMyServicesUseCase.execute({
+        workerId,
+        skip: pagination?.skip ?? 0,
+        take: pagination?.take ?? 10,
+      });
+
+      const paginationMeta = getPaginationMetadata(
+        pagination?.page ?? 1,
+        pagination?.pageSize ?? 10,
+        result.total
+      );
+
+      return sendSuccess(res, 'Services récupérés avec succès.', {
+        services: result.services,
+        pagination: paginationMeta,
       });
     } catch (error) {
       return next(error);

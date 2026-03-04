@@ -11,6 +11,17 @@ export declare class UpdateServiceUseCase {
     private readonly serviceRepository;
     constructor(serviceRepository: IServiceRepository);
     /**
+     * Validate service price range for update
+     * Uses existing values if new values are not provided
+     *
+     * @param currentMinPrice - Current minimum price from existing service
+     * @param currentMaxPrice - Current maximum price from existing service
+     * @param inputMinPrice - New minimum price from input (optional)
+     * @param inputMaxPrice - New maximum price from input (optional)
+     * @throws BusinessErrors.badRequest if validation fails
+     */
+    private validatePriceRangeUpdate;
+    /**
      * Execute the use case
      *
      * @param id - Service ID to update
