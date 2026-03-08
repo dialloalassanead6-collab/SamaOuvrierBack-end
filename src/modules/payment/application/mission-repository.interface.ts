@@ -20,6 +20,18 @@ export interface IMissionRepositoryForPayment {
   findById(id: string): Promise<Mission | null>;
 
   /**
+   * Trouve les informations du worker pour une mission (incluant téléphone et email)
+   * Utilisé pour permettre au client de contacter le worker après paiement
+   */
+  findWorkerContactByMissionId(missionId: string): Promise<{
+    id: string;
+    nom: string;
+    prenom: string;
+    tel: string;
+    email: string;
+  } | null>;
+
+  /**
    * Met à jour le statut d'une mission
    */
   updateStatus(id: string, status: string): Promise<Mission>;

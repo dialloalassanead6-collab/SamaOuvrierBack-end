@@ -520,47 +520,31 @@ components:
         professionId:
           type: string
           format: uuid
+          description: UUID de la profession/métier du worker
           example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         identityCardRecto:
-          type: object
-          properties:
-            url:
-              type: string
-              format: uri
-            publicId:
-              type: string
-            format:
-              type: string
-            bytes:
-              type: integer
-          description: Document d'identité recto (uploadé vers Cloudinary)
+          type: string
+          format: binary
+          description: |
+            **REQUIS** - Fichier du recto de la pièce d'identité (CNI, passeport, permis de conduire)
+            
+            Types acceptés: image/jpeg, image/png, application/pdf
         identityCardVerso:
-          type: object
-          properties:
-            url:
-              type: string
-              format: uri
-            publicId:
-              type: string
-            format:
-              type: string
-            bytes:
-              type: integer
-          description: Document d'identité verso (uploadé vers Cloudinary)
+          type: string
+          format: binary
+          description: |
+            **REQUIS** - Fichier du verso de la pièce d'identité (CNI, passeport, permis de conduire)
+            
+            Types acceptés: image/jpeg, image/png, application/pdf
         diploma:
-          type: object
-          properties:
-            url:
-              type: string
-              format: uri
-            publicId:
-              type: string
-            format:
-              type: string
-            bytes:
-              type: integer
-          description: Diplôme/certificat (optionnel)
+          type: string
+          format: binary
           nullable: true
+          description: |
+            **OPTIONNEL** - Fichier du diplôme ou certificat de qualification
+            
+            Types acceptés: image/jpeg, image/png, application/pdf
+            Peut être omis ou mis à null
     
     UploadedFile:
       type: object
@@ -1486,21 +1470,116 @@ paths:
       summary: Inscription d'un nouvel utilisateur
       description: |
         Permet d'inscrire un nouveau CLIENT ou WORKER sur la plateforme.
-        - Pour CLIENT: professionId ne doit pas être présent
-        - Pour WORKER: professionId est obligatoire ainsi que les documents d'identité
+        
+        ## Types d'inscription
+        
+        ### Pour CLIENT:
+        - `type`: "CLIENT"
+        - `professionId`: ne doit PAS être présent
+        - Envoyez les données en JSON
+        
+        ### Pour WORKER:
+        - `type`: "WORKER"
+        - `professionId`: **obligatoire** (UUID de la profession)
+        - Envoyez en `multipart/form-data` avec les fichiers suivants:
+          
+        ### Fichiers REQUIS (multipart/form-data):
+        - `identityCardRecto`: Fichier du recto de la pièce d'identité (CNI, passeport)
+        - `identityCardVerso`: Fichier du verso de la pièce d'identité
+        
+        ### Fichier OPTIONNEL:
+        - `diploma`: Fichier du diplôme ou certificat (optionnel)
+        
+        **Note**: Pour WORKER, utilisez `multipart/form-data` avec les fichiers binaires.
+        Les autres champs (nom, prenom, etc.) doivent être envoyés comme champs de formulaire.
       tags:
         - Auth
+      consumes:
+        - multipart/form-data
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              oneOf:
-                - $ref: '#/components/schemas/ClientRegisterRequest'
-                - $ref: '#/components/schemas/WorkerRegisterRequest'
+              type: object
+              required:
+                - nom
+                - prenom
+                - adresse
+                - tel
+                - email
+                - password
+                - type
+              properties:
+                nom:
+                  type: string
+                  maxLength: 100
+                  description: Nom de famille
+                  example: "Sall"
+                prenom:
+                  type: string
+                  maxLength: 100
+                  description: Prénom
+                  example: "Fatou"
+                adresse:
+                  type: string
+                  maxLength: 255
+                  description: Adresse
+                  example: "Point E, Dakar"
+                tel:
+                  type: string
+                  maxLength: 20
+                  description: Numéro de téléphone
+                  example: "+221761234567"
+                email:
+                  type: string
+                  format: email
+                  maxLength: 255
+                  description: Adresse email
+                  example: "fatou.sall@email.com"
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 100
+                  description: Mot de passe
+                  example: "Password123"
+                type:
+                  type: string
+                  enum: [CLIENT, WORKER]
+                  description: Type de compte (CLIENT ou WORKER)
+                  example: "WORKER"
+                professionId:
+                  type: string
+                  format: uuid
+                  description: |
+                    UUID de la profession (SEULLEMENT pour WORKER, obligatoire si type=WORKER)
+                  example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                identityCardRecto:
+                  type: string
+                  format: binary
+                  description: |
+                    **SEULEMENT pour WORKER - REQUIS**
+                    Fichier du recto de la pièce d'identité (CNI, passeport, permis de conduire)
+                    Types: image/jpeg, image/png, application/pdf
+                identityCardVerso:
+                  type: string
+                  format: binary
+                  description: |
+                    **SEULEMENT pour WORKER - REQUIS**
+                    Fichier du verso de la pièce d'identité
+                    Types: image/jpeg, image/png, application/pdf
+                diploma:
+                  type: string
+                  format: binary
+                  nullable: true
+                  description: |
+                    **SEULEMENT pour WORKER - OPTIONNEL**
+                    Fichier du diplôme ou certificat
+                    Types: image/jpeg, image/png, application/pdf
             examples:
               inscription_client:
                 summary: Inscription CLIENT
+                description: Pour CLIENT, n'incluez pas professionId ni les fichiers
                 value:
                   nom: "Diop"
                   prenom: "Moussa"
@@ -1510,7 +1589,12 @@ paths:
                   password: "Password123"
                   type: "CLIENT"
               inscription_worker:
-                summary: Inscription WORKER
+                summary: Inscription WORKER avec documents
+                description: |
+                  Pour WORKER:
+                  1. Sélectionnez un fichier pour identityCardRecto (obligatoire)
+                  2. Sélectionnez un fichier pour identityCardVerso (obligatoire)
+                  3. Optionally sélectionnez un fichier pour diploma
                 value:
                   nom: "Sall"
                   prenom: "Fatou"
@@ -1520,6 +1604,9 @@ paths:
                   password: "Password123"
                   type: "WORKER"
                   professionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  identityCardRecto: "(cliquez Choose File pour sélectionner)"
+                  identityCardVerso: "(cliquez Choose File pour sélectionner)"
+                  diploma: "(cliquez Choose File pour sélectionner - optionnel)"
       responses:
         201:
           description: Inscription réussie
@@ -1528,11 +1615,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         400:
-          description: Données de validation invalides
+          description: Données de validation invalides ou fichiers manquants
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+              examples:
+                validation_error:
+                  summary: Erreur de validation des données
+                  value:
+                    success: false
+                    message: "Les données fournies sont invalides."
+                    code: "VALIDATION_ERROR"
+                missing_identitycard_recto:
+                  summary: Fichier recto d'identité manquant
+                  value:
+                    success: false
+                    message: "Le fichier identityCardRecto (recto de la carte d'identité) est requis pour l'inscription worker"
+                    code: "MISSING_FILE"
+                missing_identitycard_verso:
+                  summary: Fichier verso d'identité manquant
+                  value:
+                    success: false
+                    message: "Le fichier identityCardVerso (verso de la carte d'identité) est requis pour l'inscription worker"
+                    code: "MISSING_FILE"
         403:
           description: Type de compte invalide
           content:
@@ -2773,7 +2879,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
 
-  /workers/{workerId}/reviews:
+  /reviews/workers/{workerId}/reviews:
     get:
       summary: Liste des avis d'un worker
       description: Récupère tous les avis d'un worker

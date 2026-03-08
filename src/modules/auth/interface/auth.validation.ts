@@ -58,13 +58,14 @@ const baseRegisterSchema = z.object({
 /**
  * Client registration schema
  * - type = "CLIENT"
- * - professionId is FORBIDDEN (must not be present)
+ * - professionId should be empty or not present for CLIENT
  * - No document uploads required
  */
 export const clientRegisterSchema = baseRegisterSchema.extend({
   type: z.literal('CLIENT'),
-  professionId: z.undefined(),
-}).strict();
+  // Accept empty string or undefined and treat as undefined
+  professionId: z.union([z.undefined(), z.literal('')]).transform(() => undefined),
+}).strip(); // Use strip() to remove unknown fields instead of rejecting them
 
 export type ClientRegisterRequest = z.infer<typeof clientRegisterSchema>;
 

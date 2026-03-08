@@ -95,6 +95,9 @@ export const workerUploadFields = [
  * Create upload middleware for worker registration
  * Handles both required (identity) and optional (diploma) documents
  * Uses memory storage - files will be uploaded to Cloudinary in the controller
+ * 
+ * IMPORTANT: Use .any() to accept all form fields, not just file fields.
+ * This allows both CLIENT (no files) and WORKER (with files) registration.
  */
 export function createWorkerUploadMiddleware() {
   return multer({
@@ -103,7 +106,7 @@ export function createWorkerUploadMiddleware() {
       fileSize: MAX_FILE_SIZE,
     },
     fileFilter,
-  }).fields(workerUploadFields);
+  }).any();
 }
 
 // ============================================================================

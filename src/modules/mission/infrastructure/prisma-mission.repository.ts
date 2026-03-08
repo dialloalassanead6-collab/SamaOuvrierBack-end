@@ -271,6 +271,50 @@ export class PrismaMissionRepository implements IMissionRepository {
   // METHODS FOR PAYMENT MODULE (IMissionRepositoryForPayment)
   // ============================================================================
 
+  /**
+   * Trouve les informations de contact du worker pour une mission
+   * Utilisé pour permettre au client de contacter le worker après paiement
+   */
+  async findWorkerContactByMissionId(missionId: string): Promise<{
+    id: string;
+    nom: string;
+    prenom: string;
+    tel: string;
+    email: string;
+  } | null> {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: { workerId: true },
+    });
+
+    if (!mission) {
+      return null;
+    }
+
+    const worker = await this.prisma.user.findUnique({
+      where: { id: mission.workerId },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        tel: true,
+        email: true,
+      },
+    });
+
+    if (!worker) {
+      return null;
+    }
+
+    return {
+      id: worker.id,
+      nom: worker.nom,
+      prenom: worker.prenom,
+      tel: worker.tel,
+      email: worker.email,
+    };
+  }
+
   async updateStatus(id: string, status: string): Promise<Mission> {
     const prismaMission = await this.prisma.mission.update({
       where: { id },

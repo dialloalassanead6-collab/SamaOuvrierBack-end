@@ -46,29 +46,47 @@ export class AuthController {
   ): Promise<Response | void> {
     try {
       // Get files from request (uploaded by multer)
-      const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+      // With .any(), files is an array, not an object
+      const files = req.files as Express.Multer.File[] | undefined;
       
       // Parse the body data
       const bodyData = req.body;
       
+      // DEBUG: Log to see what's received
+      console.log('=== DEBUG REGISTER ===');
+      console.log('bodyData.type:', bodyData.type);
+      console.log('files:', files);
+      console.log('files count:', files?.length);
+      
+      // Helper function to find file by fieldname
+      const findFile = (fieldname: string): Express.Multer.File | undefined => {
+        const found = files?.find(f => f.fieldname === fieldname);
+        console.log(`Finding ${fieldname}:`, found ? 'FOUND' : 'NOT FOUND');
+        return found;
+      };
+      
       // For worker registration, we need to handle file uploads
       if (bodyData.type === 'WORKER') {
         // Validate required identity card files
-        if (!files?.identityCardRecto || !files.identityCardRecto[0]) {
-          return sendCreated(res, AUTH_MESSAGES.REGISTER_SUCCESS, {
-            user: null,
-            token: '',
+        const identityCardRectoFile = findFile('identityCardRecto');
+        const identityCardVersoFile = findFile('identityCardVerso');
+        
+        if (!identityCardRectoFile) {
+          return res.status(400).json({
+            success: false,
+            message: 'Le fichier identityCardRecto (recto de la carte d\'identite) est requis pour l\'inscription worker',
+            code: 'MISSING_FILE',
           });
         }
-        if (!files?.identityCardVerso || !files.identityCardVerso[0]) {
-          return sendCreated(res, AUTH_MESSAGES.REGISTER_SUCCESS, {
-            user: null,
-            token: '',
+        if (!identityCardVersoFile) {
+          return res.status(400).json({
+            success: false,
+            message: 'Le fichier identityCardVerso (verso de la carte d\'identite) est requis pour l\'inscription worker',
+            code: 'MISSING_FILE',
           });
         }
         
         // Upload identity card recto to Cloudinary
-        const identityCardRectoFile = files.identityCardRecto[0];
         const identityCardRectoResult = await workerDocumentService.uploadDocument(
           {
             buffer: identityCardRectoFile.buffer,
@@ -81,7 +99,6 @@ export class AuthController {
         );
         
         // Upload identity card verso to Cloudinary
-        const identityCardVersoFile = files.identityCardVerso[0];
         const identityCardVersoResult = await workerDocumentService.uploadDocument(
           {
             buffer: identityCardVersoFile.buffer,
@@ -95,8 +112,8 @@ export class AuthController {
         
         // Upload diploma if provided (OPTIONAL)
         let diplomaResult = null;
-        if (files?.diploma && files.diploma[0]) {
-          const diplomaFile = files.diploma[0];
+        const diplomaFile = findFile('diploma');
+        if (diplomaFile) {
           diplomaResult = await workerDocumentService.uploadDocument(
             {
               buffer: diplomaFile.buffer,

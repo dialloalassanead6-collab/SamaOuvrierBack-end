@@ -28,6 +28,13 @@ export interface CreatePaymentResult {
   escrowId: string;
   paymentUrl: string;
   amount: number;
+  worker: {
+    id: string;
+    nom: string;
+    prenom: string;
+    tel: string;
+    email: string;
+  };
 }
 
 /**
@@ -122,11 +129,19 @@ export class CreatePaymentUseCase {
     // 8. Mettre à jour le statut de la mission (sera fait via webhook ou confirmation)
     // Note: La transition vers PENDING_ACCEPT se fait via confirm-initial-payment
 
+    // 9. Récupérer les informations du worker pour permettre au client de le contacter
+    const workerContact = await this.missionRepository.findWorkerContactByMissionId(input.missionId);
+
+    if (!workerContact) {
+      throw BusinessErrors.notFound('Worker introuvable.');
+    }
+
     return {
       paymentId: saved.payment.id,
       escrowId: saved.escrow.id,
       paymentUrl,
       amount,
+      worker: workerContact,
     };
   }
 }

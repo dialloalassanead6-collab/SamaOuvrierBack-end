@@ -21,20 +21,115 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *     summary: Inscription d'un nouvel utilisateur
  *     description: |
  *       Permet d'inscrire un nouveau CLIENT ou WORKER sur la plateforme.
- *       - Pour CLIENT: professionId ne doit pas etre present
- *       - Pour WORKER: professionId est obligatoire
+ *       
+ *       ## Types d'inscription
+ *       
+ *       ### Pour CLIENT:
+ *       - type: "CLIENT"
+ *       - professionId ne doit PAS être présent
+ *       - Envoyez les données en JSON
+ *       
+ *       ### Pour WORKER:
+ *       - type: "WORKER"
+ *       - professionId est **obligatoire** (UUID de la profession)
+ *       - Envoyez en multipart/form-data avec les fichiers suivants:
+ *       
+ *       ### Fichiers REQUIS (multipart/form-data):
+ *       - identityCardRecto: Fichier du recto de la pièce d'identité (CNI, passeport)
+ *       - identityCardVerso: Fichier du verso de la pièce d'identité
+ *       
+ *       ### Fichier OPTIONNEL:
+ *       - diploma: Fichier du diplôme ou certificat (optionnel)
+ *       
+ *       Types de fichiers acceptés: image/jpeg, image/png, application/pdf
  *     tags:
- *       - Authentification
+ *       - Auth
+ *     consumes:
+ *       - multipart/form-data
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
- *             oneOf:
- *               - $ref: '#/components/schemas/RegisterRequest'
+ *             type: object
+ *             required:
+ *               - nom
+ *               - prenom
+ *               - adresse
+ *               - tel
+ *               - email
+ *               - password
+ *               - type
+ *             properties:
+ *               nom:
+ *                 type: string
+ *                 maxLength: 100
+ *                 description: Nom de famille
+ *                 example: "Sall"
+ *               prenom:
+ *                 type: string
+ *                 maxLength: 100
+ *                 description: Prénom
+ *                 example: "Fatou"
+ *               adresse:
+ *                 type: string
+ *                 maxLength: 255
+ *                 description: Adresse
+ *                 example: "Point E, Dakar"
+ *               tel:
+ *                 type: string
+ *                 maxLength: 20
+ *                 description: Numéro de téléphone
+ *                 example: "+221761234567"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 maxLength: 255
+ *                 description: Adresse email
+ *                 example: "fatou.sall@email.com"
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 maxLength: 100
+ *                 description: Mot de passe
+ *                 example: "Password123"
+ *               type:
+ *                 type: string
+ *                 enum: [CLIENT, WORKER]
+ *                 description: Type de compte (CLIENT ou WORKER)
+ *                 example: "WORKER"
+ *               professionId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: |
+ *                   UUID de la profession (SEULLEMENT pour WORKER, obligatoire si type=WORKER)
+ *                 example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+ *               identityCardRecto:
+ *                 type: string
+ *                 format: binary
+ *                 description: |
+ *                   **SEULEMENT pour WORKER - REQUIS**
+ *                   Fichier du recto de la pièce d'identité (CNI, passeport, permis de conduire)
+ *                   Types: image/jpeg, image/png, application/pdf
+ *               identityCardVerso:
+ *                 type: string
+ *                 format: binary
+ *                 description: |
+ *                   **SEULEMENT pour WORKER - REQUIS**
+ *                   Fichier du verso de la pièce d'identité
+ *                   Types: image/jpeg, image/png, application/pdf
+ *               diploma:
+ *                 type: string
+ *                 format: binary
+ *                 nullable: true
+ *                 description: |
+ *                   **SEULEMENT pour WORKER - OPTIONNEL**
+ *                   Fichier du diplôme ou certificat
+ *                   Types: image/jpeg, image/png, application/pdf
  *           examples:
  *             inscription_client:
  *               summary: Inscription CLIENT
+ *               description: Pour CLIENT, n'incluez pas professionId ni les fichiers
  *               value:
  *                 nom: "Diop"
  *                 prenom: "Moussa"
@@ -44,7 +139,12 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *                 password: "Password123"
  *                 type: "CLIENT"
  *             inscription_worker:
- *               summary: Inscription WORKER
+ *               summary: Inscription WORKER avec documents
+ *               description: |
+ *                 Pour WORKER:
+ *                 1. Cliquez sur "Choose File" pour identityCardRecto (obligatoire)
+ *                 2. Cliquez sur "Choose File" pour identityCardVerso (obligatoire)
+ *                 3. Optionally cliquez sur "Choose File" pour diploma
  *               value:
  *                 nom: "Sall"
  *                 prenom: "Fatou"
@@ -54,16 +154,19 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *                 password: "Password123"
  *                 type: "WORKER"
  *                 professionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+ *                 identityCardRecto: "(cliquez Choose File pour sélectionner)"
+ *                 identityCardVerso: "(cliquez Choose File pour sélectionner)"
+ *                 diploma: "(cliquez Choose File pour sélectionner - optionnel)"
  *     responses:
  *       201:
- *         description: Inscription reussie
+ *         description: Inscription réussie
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AuthResponse'
  *             example:
  *               success: true
- *               message: "Inscription effectuee avec succes."
+ *               message: "Inscription effectuée avec succès."
  *               data:
  *                 user:
  *                   id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
@@ -79,11 +182,30 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *                   updatedAt: "2024-01-15T10:30:00.000Z"
  *                 token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *       400:
- *         description: Donnees de validation invalides
+ *         description: Données invalides ou fichiers manquants
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *             examples:
+ *               validation_error:
+ *                 summary: Erreur de validation des données
+ *                 value:
+ *                   success: false
+ *                   message: "Les données fournies sont invalides."
+ *                   code: "VALIDATION_ERROR"
+ *               missing_identitycard_recto:
+ *                 summary: Fichier recto d'identité manquant
+ *                 value:
+ *                   success: false
+ *                   message: "Le fichier identityCardRecto (recto de la carte d'identité) est requis pour l'inscription worker"
+ *                   code: "MISSING_FILE"
+ *               missing_identitycard_verso:
+ *                 summary: Fichier verso d'identité manquant
+ *                 value:
+ *                   success: false
+ *                   message: "Le fichier identityCardVerso (verso de la carte d'identité) est requis pour l'inscription worker"
+ *                   code: "MISSING_FILE"
  *       403:
  *         description: Type de compte invalide
  *         content:
@@ -92,17 +214,17 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               success: false
- *               message: "L'inscription en tant qu'administrateur n'est pas autorisee."
+ *               message: "L'inscription en tant qu'administrateur n'est pas autorisée."
  *               code: "AUTH_ADMIN_FORBIDDEN"
  *       409:
- *         description: Email deja utilise
+ *         description: Email déjà utilisé
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ConflictError'
  *             example:
  *               success: false
- *               message: "Cette adresse email est deja utilisee."
+ *               message: "Cette adresse email est déjà utilisée."
  *               code: "AUTH_EMAIL_EXISTS"
  */
 
@@ -115,7 +237,7 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *       Authentifie un utilisateur et retourne un token JWT.
  *       - Les workers doivent avoir un statut APPROVED pour se connecter
  *     tags:
- *       - Authentification
+ *       - Auth
  *     requestBody:
  *       required: true
  *       content:
@@ -170,7 +292,7 @@ import { createWorkerUploadMiddleware } from '../../../shared/middleware/upload.
  *     summary: Obtenir le profil de l'utilisateur connecte
  *     description: Retourne les informations de l'utilisateur authentifie
  *     tags:
- *       - Authentification
+ *       - Auth
  *     security:
  *       - BearerAuth: []
  *     responses:

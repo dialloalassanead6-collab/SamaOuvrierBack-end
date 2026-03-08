@@ -63,6 +63,9 @@ avec signature de vérification dans l'en-tête \`x-paytech-signature\`.
   tags: [
     { name: 'Auth', description: "Endpoints d'authentification et d'inscription" },
     { name: 'Users', description: 'Gestion des utilisateurs' },
+    { name: 'Utilisateurs', description: 'Gestion des utilisateurs par l\'administrateur' },
+    { name: 'Worker - Public', description: 'Routes publiques pour la liste des travailleurs' },
+    { name: 'Worker - Gestion du compte', description: 'Routes protégées pour la gestion du profil worker' },
     { name: 'Missions', description: 'Gestion des missions et du cycle de vie' },
     { name: 'Payments', description: 'Paiements et intégration PayTech' },
     { name: 'Escrow', description: 'Gestion des fonds en attente' },
@@ -71,6 +74,10 @@ avec signature de vérification dans l'en-tête \`x-paytech-signature\`.
     { name: 'Services', description: 'Services proposés par les workers' },
     { name: 'Dashboard', description: 'Tableaux de bord selon le rôle' },
     { name: 'Admin', description: 'Administration et modération' },
+    { name: 'Admin - Gestion des utilisateurs', description: 'Gestion des utilisateurs par l\'administrateur' },
+    { name: 'Admin - Gestion des travailleurs', description: 'Gestion des travailleurs (validation, approbation)' },
+    { name: 'Utilisateurs - Statut', description: 'Gestion du statut des utilisateurs' },
+    { name: 'Utilisateurs - Statut (Admin)', description: 'Gestion admin du statut des utilisateurs' },
     { name: 'Notifications', description: 'Gestion des notifications' },
     { name: 'Upload', description: 'Upload de fichiers vers Cloudinary' },
   ],
@@ -193,6 +200,108 @@ Jeton JWT d'authentification. Obtenu via \`/auth/login\`.
           totalReviews: { type: 'integer', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      UserResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Opération réussie' },
+          data: { $ref: '#/components/schemas/User' },
+        },
+      },
+      UserListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Liste des utilisateurs' },
+          data: {
+            type: 'object',
+            properties: {
+              users: {
+                type: 'array',
+                items: { $ref: '#/components/schemas/User' },
+              },
+              pagination: { $ref: '#/components/schemas/Pagination' },
+            },
+          },
+        },
+      },
+      CreateUserRequest: {
+        type: 'object',
+        required: ['nom', 'prenom', 'adresse', 'tel', 'email', 'password', 'type'],
+        properties: {
+          nom: { type: 'string', maxLength: 100, example: 'Diop' },
+          prenom: { type: 'string', maxLength: 100, example: 'Moussa' },
+          adresse: { type: 'string', maxLength: 255, example: 'Dakar, Sénégal' },
+          tel: { type: 'string', maxLength: 20, example: '+221771234567' },
+          email: { type: 'string', format: 'email', example: 'moussa.diop@email.com' },
+          password: { type: 'string', minLength: 8, example: 'Password123' },
+          type: { type: 'string', enum: ['CLIENT', 'WORKER', 'ADMIN'], example: 'CLIENT' },
+          professionId: { type: 'string', format: 'uuid', nullable: true },
+        },
+      },
+      UpdateUserRequest: {
+        type: 'object',
+        properties: {
+          nom: { type: 'string', maxLength: 100 },
+          prenom: { type: 'string', maxLength: 100 },
+          adresse: { type: 'string', maxLength: 255 },
+          tel: { type: 'string', maxLength: 20 },
+          avatar: { type: 'string', nullable: true },
+        },
+      },
+      ValidationErrorResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          message: { type: 'string', example: 'Erreur de validation' },
+          error: {
+            type: 'object',
+            properties: {
+              details: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    field: { type: 'string', example: 'email' },
+                    message: { type: 'string', example: 'Email invalide' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      PublicWorker: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string' },
+          prenom: { type: 'string' },
+          avatar: { type: 'string', nullable: true },
+          averageRating: { type: 'number', nullable: true },
+          totalReviews: { type: 'integer', nullable: true },
+          profession: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+            },
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      PublicService: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          minPrice: { type: 'number' },
+          maxPrice: { type: 'number' },
+          workerId: { type: 'string', format: 'uuid' },
+          createdAt: { type: 'string', format: 'date-time' },
         },
       },
 

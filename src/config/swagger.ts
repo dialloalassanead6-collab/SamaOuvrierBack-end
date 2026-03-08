@@ -67,6 +67,9 @@ avec signature de vérification dans l'en-tête \`x-paytech-signature\`.
     tags: [
       { name: 'Auth', description: 'Endpoints d\'authentification et d\'inscription' },
       { name: 'Users', description: 'Gestion des utilisateurs' },
+      { name: 'Utilisateurs', description: 'Gestion des utilisateurs par l\'administrateur' },
+      { name: 'Worker - Public', description: 'Routes publiques pour la liste des travailleurs' },
+      { name: 'Worker - Gestion du compte', description: 'Routes protégées pour la gestion du profil worker' },
       { name: 'Missions', description: 'Gestion des missions et du cycle de vie' },
       { name: 'Payments', description: 'Paiements et intégration PayTech' },
       { name: 'Escrow', description: 'Gestion des fonds en attente' },
