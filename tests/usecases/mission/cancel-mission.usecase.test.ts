@@ -9,16 +9,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CancelMissionUseCase } from '../../../src/modules/mission/application/cancel-mission.usecase.js';
 import { MissionStatus } from '../../../src/modules/mission/domain/index.js';
 import { createMockMissionRepository } from '../../__mocks__/repositories.js';
+import { createMockNotificationService } from '../../mocks/services/notification.service.js';
 import type { IMissionRepository } from '../../../src/modules/mission/application/mission.repository.interface.js';
 import { generateTestId, createTestMission } from '../../setup.js';
 
 describe('CancelMissionUseCase', () => {
   let missionRepository: IMissionRepository;
+  let notificationService: ReturnType<typeof createMockNotificationService>;
   let cancelMissionUseCase: CancelMissionUseCase;
 
   beforeEach(() => {
     missionRepository = createMockMissionRepository();
-    cancelMissionUseCase = new CancelMissionUseCase(missionRepository);
+    notificationService = createMockNotificationService();
+    cancelMissionUseCase = new CancelMissionUseCase(missionRepository, notificationService as any);
   });
 
   describe('execute()', () => {
@@ -34,8 +37,8 @@ describe('CancelMissionUseCase', () => {
         status: MissionStatus.CANCELLED,
       } as any);
 
-      // Act
-      await cancelMissionUseCase.execute(mission.id);
+      // Act - Le userId doit être le clientId ou workerId de la mission
+      await cancelMissionUseCase.execute(mission.id, mission.clientId);
 
       // Assert
       expect(missionRepository.update).toHaveBeenCalled();
@@ -54,7 +57,7 @@ describe('CancelMissionUseCase', () => {
       } as any);
 
       // Act
-      await cancelMissionUseCase.execute(mission.id);
+      await cancelMissionUseCase.execute(mission.id, mission.clientId);
 
       // Assert
       expect(missionRepository.update).toHaveBeenCalled();
@@ -73,7 +76,7 @@ describe('CancelMissionUseCase', () => {
       } as any);
 
       // Act
-      await cancelMissionUseCase.execute(mission.id);
+      await cancelMissionUseCase.execute(mission.id, mission.clientId);
 
       // Assert
       expect(missionRepository.update).toHaveBeenCalled();
@@ -92,7 +95,7 @@ describe('CancelMissionUseCase', () => {
       } as any);
 
       // Act
-      await cancelMissionUseCase.execute(mission.id);
+      await cancelMissionUseCase.execute(mission.id, mission.clientId);
 
       // Assert
       expect(missionRepository.update).toHaveBeenCalled();
@@ -111,7 +114,26 @@ describe('CancelMissionUseCase', () => {
       } as any);
 
       // Act
-      await cancelMissionUseCase.execute(mission.id);
+      await cancelMissionUseCase.execute(mission.id, mission.clientId);
+
+      // Assert
+      expect(missionRepository.update).toHaveBeenCalled();
+    });
+
+    it('should allow worker to cancel mission', async () => {
+      // Arrange
+      const mission = createTestMission({ 
+        status: MissionStatus.PENDING_PAYMENT 
+      });
+
+      vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
+      vi.spyOn(missionRepository, 'update').mockResolvedValue({
+        ...mission,
+        status: MissionStatus.CANCELLED,
+      } as any);
+
+      // Act - Worker peut aussi annuler
+      await cancelMissionUseCase.execute(mission.id, mission.workerId);
 
       // Assert
       expect(missionRepository.update).toHaveBeenCalled();
@@ -124,8 +146,22 @@ describe('CancelMissionUseCase', () => {
       vi.spyOn(missionRepository, 'findById').mockResolvedValue(null);
 
       // Act & Assert
-      await expect(cancelMissionUseCase.execute('nonexistent-id')).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute('nonexistent-id', generateTestId('user'))).rejects.toThrow(
         'Mission introuvable'
+      );
+    });
+
+    it('should throw error if user is not the client or worker', async () => {
+      // Arrange
+      const mission = createTestMission({ 
+        status: MissionStatus.PENDING_PAYMENT 
+      });
+
+      vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
+
+      // Act & Assert - Un utilisateur tiers ne peut pas annuler
+      await expect(cancelMissionUseCase.execute(mission.id, 'unauthorized-user-id')).rejects.toThrow(
+        "Vous n'êtes pas autorisé à annuler cette mission"
       );
     });
 
@@ -138,7 +174,7 @@ describe('CancelMissionUseCase', () => {
       vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
 
       // Act & Assert
-      await expect(cancelMissionUseCase.execute(mission.id)).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute(mission.id, mission.clientId)).rejects.toThrow(
         'La mission ne peut pas être annulée'
       );
     });
@@ -152,7 +188,7 @@ describe('CancelMissionUseCase', () => {
       vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
 
       // Act & Assert
-      await expect(cancelMissionUseCase.execute(mission.id)).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute(mission.id, mission.clientId)).rejects.toThrow(
         'La mission ne peut pas être annulée'
       );
     });
@@ -166,7 +202,7 @@ describe('CancelMissionUseCase', () => {
       vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
 
       // Act & Assert
-      await expect(cancelMissionUseCase.execute(mission.id)).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute(mission.id, mission.clientId)).rejects.toThrow(
         'La mission ne peut pas être annulée'
       );
     });
@@ -180,7 +216,7 @@ describe('CancelMissionUseCase', () => {
       vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
 
       // Act & Assert
-      await expect(cancelMissionUseCase.execute(mission.id)).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute(mission.id, mission.clientId)).rejects.toThrow(
         'La mission ne peut pas être annulée'
       );
     });
@@ -194,15 +230,29 @@ describe('CancelMissionUseCase', () => {
       vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
 
       // Act & Assert
-      await expect(cancelMissionUseCase.execute(mission.id)).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute(mission.id, mission.clientId)).rejects.toThrow(
         'La mission ne peut pas être annulée'
       );
     });
 
     it('should throw error if missionId is empty', async () => {
       // Act & Assert
-      await expect(cancelMissionUseCase.execute('')).rejects.toThrow(
+      await expect(cancelMissionUseCase.execute('', generateTestId('user'))).rejects.toThrow(
         "L'ID de la mission est requis"
+      );
+    });
+
+    it('should throw error if userId is empty', async () => {
+      // Arrange
+      const mission = createTestMission({ 
+        status: MissionStatus.PENDING_PAYMENT 
+      });
+
+      vi.spyOn(missionRepository, 'findById').mockResolvedValue(mission as any);
+
+      // Act & Assert
+      await expect(cancelMissionUseCase.execute(mission.id, '')).rejects.toThrow(
+        "L'ID de l'utilisateur est requis"
       );
     });
   });

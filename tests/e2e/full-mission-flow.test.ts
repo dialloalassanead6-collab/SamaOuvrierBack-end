@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createClientUser, createApprovedWorker, createAdminUser } from '../factories/user.factory.js';
-import { createPendingPaymentMission, createContactUnlockedMission, createInProgressMission, createCompletedMission } from '../factories/mission.factory.js';
+import { createPendingPaymentMission, createPendingAcceptMission, createCancelledMission, createContactUnlockedMission, createInProgressMission, createCompletedMission } from '../factories/mission.factory.js';
 import { createSuccessfulPayment, createHeldEscrow, createReleasedEscrow } from '../factories/payment.factory.js';
 import { generateClientToken, generateWorkerToken, generateAdminToken } from '../helpers/auth.helper.js';
 import { createMockMissionRepository } from '../mocks/repositories/mission.repository.js';
@@ -114,7 +114,7 @@ describe('E2E - Full Mission Lifecycle Flow', () => {
         status: 'CONTACT_UNLOCKED',
       });
 
-      expect(acceptedMission.status).toBe('CONTACT_UNLOCKED');
+      expect(acceptedMission?.status).toBe('CONTACT_UNLOCKED');
 
       // Step 5: Set final price (negociation done)
       const finalPriceMission = {
@@ -132,8 +132,8 @@ describe('E2E - Full Mission Lifecycle Flow', () => {
         montantRestant: 2500,
       });
 
-      expect(inProgressMission.status).toBe('IN_PROGRESS');
-      expect(inProgressMission.prixFinal).toBe(7500);
+      expect(inProgressMission?.status).toBe('IN_PROGRESS');
+      expect(inProgressMission?.prixFinal).toBe(7500);
 
       // Step 6: Final payment if needed (for this case, no extra payment needed)
       // Since prixFinal (7500) > prixMin (5000), need additional payment
@@ -155,9 +155,9 @@ describe('E2E - Full Mission Lifecycle Flow', () => {
         workerConfirmed: true,
       });
 
-      expect(finalMission.status).toBe('COMPLETED');
-      expect(finalMission.clientConfirmed).toBe(true);
-      expect(finalMission.workerConfirmed).toBe(true);
+      expect(finalMission?.status).toBe('COMPLETED');
+      expect(finalMission?.clientConfirmed).toBe(true);
+      expect(finalMission?.workerConfirmed).toBe(true);
 
       // Step 8: Release escrow to worker
       const releasedEscrow = {
@@ -219,11 +219,15 @@ describe('E2E - Full Mission Lifecycle Flow', () => {
       const initialEscrow = createHeldEscrow({
         missionId: mission.id,
         amount: initialPayment.amount,
+        workerAmount: Math.round(initialPayment.amount * 0.9),
+        commissionAmount: Math.round(initialPayment.amount * 0.1),
       });
 
       const finalEscrow = createHeldEscrow({
         missionId: mission.id,
         amount: finalPayment.amount,
+        workerAmount: Math.round(finalPayment.amount * 0.9),
+        commissionAmount: Math.round(finalPayment.amount * 0.1),
       });
 
       const totalEscrowAmount = initialEscrow.amount + finalEscrow.amount;

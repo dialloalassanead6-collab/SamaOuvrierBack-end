@@ -7,7 +7,7 @@
 import { vi } from 'vitest';
 import type { IAuthRepository, CreateUserData } from '../../src/modules/auth/application/auth.repository.interface.js';
 import type { RegisteredUser, UserWithPassword, ProfessionEntity } from '../../src/modules/auth/domain/auth.types.js';
-import { Role, WorkerStatus } from '@prisma/client';
+import { Role, WorkerStatus } from './prisma-client.js';
 import { generateTestId } from '../setup.js';
 
 /**

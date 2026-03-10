@@ -4,8 +4,11 @@
 // Configuration globale pour les tests Vitest
 // ============================================================================
 
-import { vi } from 'vitest';
+import { vi, beforeEach, afterEach, afterAll } from 'vitest';
 import crypto from 'crypto';
+import { EscrowStatus } from '../src/modules/payment/domain/index.js';
+import { MissionStatus } from '../src/modules/mission/domain/index.js';
+import { PaymentStatus } from '../src/modules/payment/domain/index.js';
 
 // ============================================================================
 // CRYPTO GLOBAL MOCK
@@ -110,24 +113,40 @@ export const createMockRequest = (overrides: Record<string, unknown> = {}): Reco
 
 /**
  * Factory pour créer des données de test pour Mission
+ * Inclut les méthodes nécessaires pour les tests
  */
-export const createTestMission = (overrides: Record<string, unknown> = {}) => ({
-  id: generateTestId('mission'),
-  clientId: generateTestId('client'),
-  workerId: generateTestId('worker'),
-  serviceId: generateTestId('service'),
-  prixMin: 5000,
-  prixMax: 10000,
-  prixFinal: null,
-  montantRestant: null,
-  cancellationRequestedBy: null,
-  clientConfirmed: false,
-  workerConfirmed: false,
-  status: 'PENDING_PAYMENT',
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+export const createTestMission = (overrides: Record<string, unknown> = {}) => {
+  const status = (overrides.status as MissionStatus) || MissionStatus.PENDING_PAYMENT;
+  return {
+    id: generateTestId('mission'),
+    clientId: generateTestId('client'),
+    workerId: generateTestId('worker'),
+    serviceId: generateTestId('service'),
+    prixMin: 5000,
+    prixMax: 10000,
+    prixFinal: null,
+    montantRestant: null,
+    cancellationRequestedBy: null,
+    clientConfirmed: false,
+    workerConfirmed: false,
+    status,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    // Méthodes nécessaires pour les tests
+    canCancel: () => status === MissionStatus.PENDING_PAYMENT || status === MissionStatus.PENDING_ACCEPT,
+    canRequestCancellation: () => status === MissionStatus.IN_PROGRESS,
+    confirmInitialPayment: () => ({ ...overrides, status: MissionStatus.PENDING_ACCEPT }),
+    acceptMission: () => ({ ...overrides, status: MissionStatus.CONTACT_UNLOCKED }),
+    refuseMission: () => ({ ...overrides, status: MissionStatus.REFUSED }),
+    setFinalPrice: (price: number) => ({ ...overrides, prixFinal: price, status: MissionStatus.NEGOTIATION_DONE }),
+    completeByClient: () => ({ ...overrides, clientConfirmed: true }),
+    completeByWorker: () => ({ ...overrides, workerConfirmed: true, status: MissionStatus.COMPLETED }),
+    cancel: () => ({ ...overrides, status: MissionStatus.CANCELLED }),
+    requestCancellation: (by: string) => ({ ...overrides, cancellationRequestedBy: by, status: MissionStatus.CANCEL_REQUESTED }),
+    toResponse: function() { return this; },
+    ...overrides,
+  };
+};
 
 /**
  * Factory pour créer des données de test pour Service
@@ -166,42 +185,100 @@ export const createTestUser = (overrides: Record<string, unknown> = {}) => ({
 
 /**
  * Factory pour créer des données de test pour Payment
+ * Inclut les méthodes nécessaires pour les tests
  */
-export const createTestPayment = (overrides: Record<string, unknown> = {}) => ({
-  id: generateTestId('payment'),
-  missionId: generateTestId('mission'),
-  clientId: generateTestId('client'),
-  workerId: generateTestId('worker'),
-  amount: 5000,
-  currency: 'XOF',
-  status: 'PENDING',
-  paymentMethod: null,
-  paytechRef: null,
-  idempotencyKey: generateTestId('idem'),
-  metadata: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+export const createTestPayment = (overrides: Record<string, unknown> = {}) => {
+  const status = (overrides.status as PaymentStatus) || PaymentStatus.PENDING;
+  const payment: any = {
+    id: generateTestId('payment'),
+    missionId: generateTestId('mission'),
+    clientId: generateTestId('client'),
+    workerId: generateTestId('worker'),
+    amount: 5000,
+    currency: 'XOF',
+    status,
+    paymentMethod: null,
+    paytechRef: null,
+    idempotencyKey: generateTestId('idem'),
+    metadata: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    // Méthodes de transition
+    markAsSuccess: function(paytechRef?: string) {
+      return { ...this, status: PaymentStatus.SUCCESS, paytechRef };
+    },
+    markAsFailed: function() {
+      return { ...this, status: PaymentStatus.FAILED };
+    },
+    markAsRefunded: function() {
+      return { ...this, status: PaymentStatus.REFUNDED };
+    },
+    cancel: function() {
+      return { ...this, status: PaymentStatus.CANCELLED };
+    },
+    // Méthodes de vérification
+    isPending: () => status === PaymentStatus.PENDING,
+    isSuccessful: () => status === PaymentStatus.SUCCESS,
+    canBeRefunded: () => status === PaymentStatus.SUCCESS,
+    toProps: function() { return this; },
+    toResponse: function() { return this; },
+  };
+  return { ...payment, ...overrides };
+};
 
 /**
  * Factory pour créer des données de test pour Escrow
+ * Inclut les méthodes necesarias pour les tests d'escrow
  */
-export const createTestEscrow = (overrides: Record<string, unknown> = {}) => ({
-  id: generateTestId('escrow'),
-  paymentId: generateTestId('payment'),
-  missionId: generateTestId('mission'),
-  amount: 5000,
-  workerAmount: 4500,
-  commissionAmount: 500,
-  status: 'HELD',
-  releaseType: null,
-  paytechRef: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  releasedAt: null,
-  ...overrides,
-});
+export const createTestEscrow = (overrides: Record<string, unknown> = {}) => {
+  const status = (overrides.status as EscrowStatus) || EscrowStatus.HELD;
+  const amount = (overrides.amount as number) || 5000;
+  const workerAmount = (overrides.workerAmount as number) || amount * 0.9;
+  const commissionAmount = (overrides.commissionAmount as number) || amount * 0.1;
+  
+  const escrow: any = {
+    id: generateTestId('escrow'),
+    paymentId: generateTestId('payment'),
+    missionId: generateTestId('mission'),
+    amount,
+    workerAmount,
+    commissionAmount,
+    status,
+    releaseType: null,
+    paytechRef: null,
+    releasedBy: null,
+    releaseReason: null,
+    version: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    releasedAt: null,
+    // Méthodes de vérification de statut
+    isHeld: () => status === EscrowStatus.HELD,
+    isReleased: () => status === EscrowStatus.RELEASED,
+    isRefunded: () => status === EscrowStatus.REFUNDED,
+    isPartiallyRefunded: () => status === EscrowStatus.PARTIALLY_REFUNDED,
+    canTransitionTo: () => true,
+    // Méthodes de transition
+    hold: function(paytechRef?: string) {
+      return { ...this, status: EscrowStatus.HELD, paytechRef };
+    },
+    release: function(releasedBy: string, reason?: string) {
+      return { ...this, status: EscrowStatus.RELEASED, releasedBy, releaseReason: reason, releasedAt: new Date() };
+    },
+    fullRefund: function(refundRef?: string) {
+      return { ...this, status: EscrowStatus.REFUNDED, releasedAt: new Date() };
+    },
+    partialRefund: function(percentage: number, clientAmount: number) {
+      return { ...this, status: EscrowStatus.PARTIALLY_REFUNDED, releasedAt: new Date() };
+    },
+    // Méthodes utilitaires
+    getCommissionPercent: () => (commissionAmount / amount) * 100,
+    toProps: function() { return this; },
+    toResponse: function() { return this; },
+  };
+  
+  return { ...escrow, ...overrides };
+};
 
 // ============================================================================
 // RE-EXPORT FOR CONVENIENCE

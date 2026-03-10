@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
-import { Role } from '@prisma/client';
+import { Role } from '../../__mocks__/prisma-client.js';
 
 describe('Authenticate Middleware', () => {
   // Configuration pour les tests

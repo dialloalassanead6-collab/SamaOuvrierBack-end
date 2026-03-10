@@ -4,7 +4,7 @@
 // Factory for creating test mission data
 // ============================================================================
 
-import type { MissionStatus } from '@prisma/client';
+import type { MissionStatus } from '../__mocks__/prisma-client.js';
 import crypto from 'crypto';
 
 export interface MissionFactoryOptions {

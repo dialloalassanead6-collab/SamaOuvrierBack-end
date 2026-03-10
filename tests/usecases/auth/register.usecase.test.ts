@@ -8,7 +8,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RegisterUseCase, EmailAlreadyExistsError, ProfessionNotFoundError, NoProfessionAvailableError, AdminRegistrationForbiddenError } from '../../../src/modules/auth/application/register.usecase.js';
 import { createMockAuthRepository } from '../../__mocks__/auth.repository.js';
 import { createMockPasswordService } from '../../__mocks__/password.service.js';
-import { Role } from '@prisma/client';
+import { Role, WorkerStatus } from '../../__mocks__/prisma-client.js';
+
+// Document metadata mock pour les tests worker
+const mockDocument = {
+  url: 'https://cloudinary.com/test/document.pdf',
+  publicId: 'test/document',
+  format: 'pdf',
+  bytes: 1024,
+};
 
 describe('RegisterUseCase', () => {
   let registerUseCase: RegisterUseCase;
@@ -100,6 +108,8 @@ describe('RegisterUseCase', () => {
         email: 'newworker@test.com',
         password: 'password123',
         professionId,
+        identityCardRecto: mockDocument,
+        identityCardVerso: mockDocument,
       };
 
       mockAuthRepository.hasAnyProfession = vi.fn().mockResolvedValue(true);
@@ -129,7 +139,7 @@ describe('RegisterUseCase', () => {
       // Assert
       expect(result.user).toHaveProperty('email', 'newworker@test.com');
       expect(result.user.role).toBe(Role.WORKER);
-      expect(result.user.workerStatus).toBe('PENDING'); // Worker starts as PENDING
+      expect(result.user.workerStatus).toBe(WorkerStatus.PENDING); // Worker starts as PENDING
     });
 
     it('devrait rejeter si aucune profession disponible', async () => {
@@ -143,6 +153,8 @@ describe('RegisterUseCase', () => {
         email: 'newworker@test.com',
         password: 'password123',
         professionId: 'profession-uuid-1234',
+        identityCardRecto: mockDocument,
+        identityCardVerso: mockDocument,
       };
 
       mockAuthRepository.hasAnyProfession = vi.fn().mockResolvedValue(false);
@@ -164,6 +176,8 @@ describe('RegisterUseCase', () => {
         email: 'newworker@test.com',
         password: 'password123',
         professionId: 'invalid-profession-id',
+        identityCardRecto: mockDocument,
+        identityCardVerso: mockDocument,
       };
 
       mockAuthRepository.hasAnyProfession = vi.fn().mockResolvedValue(true);
@@ -187,6 +201,8 @@ describe('RegisterUseCase', () => {
         email: 'existing@test.com',
         password: 'password123',
         professionId,
+        identityCardRecto: mockDocument,
+        identityCardVerso: mockDocument,
       };
 
       mockAuthRepository.hasAnyProfession = vi.fn().mockResolvedValue(true);
@@ -255,6 +271,8 @@ describe('RegisterUseCase', () => {
         email: 'worker@test.com',
         password: 'password123',
         professionId,
+        identityCardRecto: mockDocument,
+        identityCardVerso: mockDocument,
       };
 
       mockAuthRepository.hasAnyProfession = vi.fn().mockResolvedValue(true);

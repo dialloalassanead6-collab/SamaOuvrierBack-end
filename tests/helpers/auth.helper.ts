@@ -5,7 +5,7 @@
 // ============================================================================
 
 import jwt from 'jsonwebtoken';
-import type { Role, WorkerStatus } from '@prisma/client';
+import type { Role, WorkerStatus } from '../__mocks__/prisma-client.js';
 
 // JWT secret for testing (must match setup.ts)
 const TEST_JWT_SECRET = 'test-jwt-secret-key-for-testing-purposes-32chars';

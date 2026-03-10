@@ -4,7 +4,7 @@
 // Factory for creating test payment and escrow data
 // ============================================================================
 
-import type { PaymentStatus, EscrowStatus } from '@prisma/client';
+import type { PaymentStatus, EscrowStatus } from '../__mocks__/prisma-client.js';
 import crypto from 'crypto';
 
 export interface PaymentFactoryOptions {
@@ -180,13 +180,20 @@ export const createEscrowFactory = (
   releasedAt: Date | null;
 } => {
   const now = new Date();
+  const amount = options.amount ?? 5000;
+  
+  // Calculate amounts if amount is provided but workerAmount/commissionAmount are not
+  const { workerAmount, commissionAmount } = (options.workerAmount !== undefined || options.commissionAmount !== undefined)
+    ? { workerAmount: options.workerAmount ?? 4500, commissionAmount: options.commissionAmount ?? 500 }
+    : calculateEscrowAmounts(amount);
+  
   return {
     id: options.id ?? `escrow-${crypto.randomUUID()}`,
     paymentId: options.paymentId ?? `payment-${crypto.randomUUID()}`,
     missionId: options.missionId ?? `mission-${crypto.randomUUID()}`,
-    amount: options.amount ?? 5000,
-    workerAmount: options.workerAmount ?? 4500,
-    commissionAmount: options.commissionAmount ?? 500,
+    amount,
+    workerAmount,
+    commissionAmount,
     status: options.status ?? 'HELD',
     releaseType: options.releaseType ?? null,
     paytechRef: options.paytechRef ?? null,

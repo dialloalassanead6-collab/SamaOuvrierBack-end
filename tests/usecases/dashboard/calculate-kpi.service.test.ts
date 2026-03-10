@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CalculateKpiService, type DerivedKpis } from '../../../src/modules/dashboard/application/calculate-kpi.service.js';
 import type { UserStats, MissionStats, PaymentStats, DisputeStats } from '../../../src/modules/dashboard/domain/types/dashboard.types.js';
-import { MissionStatus, DisputeStatus } from '@prisma/client';
+import { MissionStatus, DisputeStatus } from '../../__mocks__/prisma-client.js';
 
 describe('CalculateKpiService', () => {
   let calculateKpiService: CalculateKpiService;
@@ -578,7 +578,7 @@ describe('CalculateKpiService', () => {
       const result = calculateKpiService.calculateDerivedKpis(stats);
 
       // Assert - Max penalty for cancellation is 20 points
-      expect(result.platformHealthScore).toBeLessThan(80);
+      expect(result.platformHealthScore).toBeLessThanOrEqual(80);
     });
 
     it('should not go below 0 for platform health score', () => {

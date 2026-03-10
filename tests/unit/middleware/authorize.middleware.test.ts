@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Role } from '@prisma/client';
+import { Role } from '../../__mocks__/prisma-client.js';
 
 describe('Authorize Middleware', () => {
   // -------------------------------------------------------------------------

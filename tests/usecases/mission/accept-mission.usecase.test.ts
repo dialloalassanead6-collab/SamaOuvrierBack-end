@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AcceptMissionUseCase } from '../../../src/modules/mission/application/accept-mission.usecase.js';
 import { createMockMissionRepository } from '../../mocks/repositories/mission.repository.js';
 import { createMockNotificationService } from '../../mocks/services/notification.service.js';
-import { MissionStatus } from '@prisma/client';
+import { MissionStatus } from '../../__mocks__/prisma-client.js';
 
 describe('AcceptMissionUseCase', () => {
   let acceptMissionUseCase: AcceptMissionUseCase;

@@ -4,7 +4,7 @@
 // Factory for creating test dispute data
 // ============================================================================
 
-import type { DisputeStatus, DisputeReason, DisputeResolution } from '@prisma/client';
+import type { DisputeStatus, DisputeReason, DisputeResolution } from '../__mocks__/prisma-client.js';
 import crypto from 'crypto';
 
 export interface DisputeFactoryOptions {

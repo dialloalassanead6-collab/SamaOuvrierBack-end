@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LoginUseCase, InvalidCredentialsError, WorkerNotApprovedError, WorkerRejectedError, UserBannedLoginError, UserDeletedLoginError } from '../../../src/modules/auth/application/login.usecase.js';
 import { createMockAuthRepository, createTestClient, createTestWorkerApproved, createTestWorkerPending, createTestWorkerRejected, createTestBannedUser, createTestDeletedUser } from '../../__mocks__/auth.repository.js';
 import { createMockPasswordService, createLenientMockPasswordService, createStrictMockPasswordService } from '../../__mocks__/password.service.js';
-import { Role, WorkerStatus } from '@prisma/client';
+import { Role, WorkerStatus } from '../../__mocks__/prisma-client.js';
 
 describe('LoginUseCase', () => {
   let loginUseCase: LoginUseCase;

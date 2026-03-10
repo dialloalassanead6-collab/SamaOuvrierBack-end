@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { vi } from 'vitest';
-import type { MissionStatus } from '@prisma/client';
+import type { MissionStatus } from '../../__mocks__/prisma-client.js';
 
 // Simple mission type for tests
 export interface TestMission {

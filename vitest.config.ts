@@ -78,6 +78,9 @@ export default defineConfig({
     //清理 mocks
     clearMocks: true,
     
+    // Fichier de setup global
+    setupFiles: ['./tests/setup.ts'],
+    
     //模拟计时器
     fakeTimers: {
       now: 0,

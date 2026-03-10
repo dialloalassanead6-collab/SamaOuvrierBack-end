@@ -4,7 +4,7 @@
 // Factory for creating test user data
 // ============================================================================
 
-import type { Role, WorkerStatus } from '@prisma/client';
+import type { Role, WorkerStatus } from '../__mocks__/prisma-client.js';
 import crypto from 'crypto';
 
 // Type for user factory options - using string for flexibility

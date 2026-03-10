@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Role, WorkerStatus } from '@prisma/client';
+import { Role, WorkerStatus } from '../__mocks__/prisma-client.js';
 
 describe('Auth Controller Tests', () => {
   // -------------------------------------------------------------------------
